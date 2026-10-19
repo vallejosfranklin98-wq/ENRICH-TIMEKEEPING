@@ -29,6 +29,12 @@ video{width:100%;max-width:420px;aspect-ratio:4/3;object-fit:cover;border-radius
 @media(max-width:760px){#kiosk{grid-template-columns:1fr;padding:16px}}
 .brand{display:inline-block;background:#fff;border-radius:14px;padding:8px 16px;margin-bottom:18px}.brand img{display:block;height:56px;width:auto}
 [hidden]{display:none!important}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 26px}
+.stat{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--ink);border-radius:16px;padding:18px 20px}
+.stat b{display:block;font-size:42px;line-height:1.1;font-variant-numeric:tabular-nums}.stat span{color:var(--mut)}
+.stat.g{border-top-color:var(--in)}.stat.b{border-top-color:var(--out)}.stat.r{border-top-color:var(--bad)}
+.sub{color:var(--mut);margin:-6px 0 16px}h3.sec{margin:24px 0 10px;font-size:18px}.tag.ab{color:var(--mut)}
+@media(max-width:860px){.cards{grid-template-columns:repeat(2,1fr)}}
 #admin{padding:0}
 .login{max-width:520px;margin:10vh auto;padding:24px}
 .shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
@@ -145,13 +151,21 @@ async function adminHome() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
   $('admin').innerHTML = `<div class="shell">
   <aside class="side">${brand()}
-    <button class="nav on" data-v="logs">Employee logs</button>
+    <button class="nav on" data-v="dash">Dashboard</button>
+    <button class="nav" data-v="logs">Employee logs</button>
     <button class="nav" data-v="emps">Employee management</button>
     <button class="nav" data-v="hist">History</button>
     <button class="btn so" id="so">Sign out</button>
   </aside>
   <main class="main">
-    <section id="v-logs"><h2>Employee logs</h2>
+    <section id="v-dash"><h2>Dashboard</h2><p class="sub" id="dsub"></p>
+      <div class="cards" id="cards"></div>
+      <h3 class="sec">Today</h3>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Status</th><th>First time in</th><th>Time out</th></tr></thead><tbody id="tdb"></tbody></table></div>
+      <h3 class="sec">Missing logs</h3><p class="sub">Days in the last 14 days with a missing Time in or Time out. Today is skipped for people still working.</p>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Issue</th></tr></thead><tbody id="mdb"></tbody></table></div>
+    </section>
+    <section id="v-logs" hidden><h2>Employee logs</h2>
       <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
       <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
     </section>
@@ -165,9 +179,9 @@ async function adminHome() {
   </main></div>`;
   document.querySelector('.side').onclick = e => {
     const v = e.target.dataset.v; if (!v) return;
-    ['logs', 'emps', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    ['dash', 'logs', 'emps', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0);
+    scrollTo(0, 0); if (v === 'dash') loadDash();
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
@@ -178,7 +192,9 @@ async function adminHome() {
     if (d.chg) return chgPin(d.chg, d.name);
     if (d.eid) delEmp(d.eid, d.name);
   };
-  loadPunches(); loadEmps(); loadAudit();
+  loadPunches(); loadEmps(); loadAudit(); loadDash();
+  clearInterval(window.dashTimer);
+  window.dashTimer = setInterval(() => { if (!$('v-dash').hidden) loadDash(); }, 60000);
 }
 async function loadPunches() {
   const a = new Date(`${$('d1').value}T00:00:00+08:00`), b = new Date(`${$('d2').value}T00:00:00+08:00`); b.setDate(b.getDate() + 1);
@@ -201,9 +217,45 @@ async function loadEmps() {
 async function addEmp() {
   const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
   if (error) return say('Could not add employee', error.message);
-  $('nn').value = $('np').value = ''; loadEmps(); loadAudit();
+  $('nn').value = $('np').value = ''; loadEmps(); loadAudit(); loadDash();
 }
 
+const dayKey = d => new Date(d).toLocaleDateString('en-CA', { timeZone: TZ });
+async function loadDash() {
+  const today = dayKey(new Date());
+  const from = new Date(`${today}T00:00:00+08:00`); from.setDate(from.getDate() - 13);
+  const [E, P] = await Promise.all([
+    db.from('employees').select('id,name').eq('active', true).order('name'),
+    db.from('punches').select('employee_id,kind,punched_at').gte('punched_at', from.toISOString()).order('punched_at')
+  ]);
+  const err = E.error || P.error;
+  if (err) { $('cards').innerHTML = `<p>${esc(err.message)}</p>`; return; }
+  const emps = E.data, byEmp = {}, rows = [], issues = [];
+  emps.forEach(e => byEmp[e.id] = []);
+  P.data.forEach(p => { if (byEmp[p.employee_id]) byEmp[p.employee_id].push(p); });
+  emps.forEach(e => {
+    const list = byEmp[e.id], tp = list.filter(p => dayKey(p.punched_at) === today), last = tp[tp.length - 1];
+    const fin = tp.find(p => p.kind === 'in');
+    rows.push({ name: e.name, status: !last ? 'Absent' : last.kind === 'in' ? 'Timed in' : 'Timed out', tin: fin && fin.punched_at, tout: last && last.kind === 'out' ? last.punched_at : null });
+    const days = {};
+    list.forEach(p => { const k = dayKey(p.punched_at); (days[k] = days[k] || []).push(p); });
+    Object.keys(days).forEach(day => {
+      let open = false, noOut = false, noIn = false;
+      days[day].forEach(p => { if (p.kind === 'in') { if (open) noOut = true; open = true; } else { if (!open) noIn = true; open = false; } });
+      if (open && day !== today) noOut = true;
+      if (noIn) issues.push({ name: e.name, day, issue: 'Time out without a Time in' });
+      if (noOut) issues.push({ name: e.name, day, issue: 'No Time out' });
+    });
+  });
+  const present = rows.filter(r => r.status !== 'Absent').length;
+  const card = (n, label, c = '') => `<div class="stat ${c}"><b>${n}</b><span>${label}</span></div>`;
+  $('dsub').textContent = fmt(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
+  $('cards').innerHTML = card(emps.length, 'Active employees') + card(present, 'Present today', 'g') + card(emps.length - present, 'Absent today', 'b') + card(issues.length, 'Missing logs', 'r');
+  const t = x => x ? fmt(x, { hour: 'numeric', minute: '2-digit' }) : '-';
+  $('tdb').innerHTML = rows.map(r => `<tr><td>${esc(r.name)}</td><td class="tag ${r.status === 'Timed in' ? 'in' : r.status === 'Timed out' ? 'out' : 'ab'}">${r.status}</td><td>${t(r.tin)}</td><td>${t(r.tout)}</td></tr>`).join('') || '<tr><td colspan="4">No active employees yet.</td></tr>';
+  issues.sort((a, b) => b.day.localeCompare(a.day));
+  $('mdb').innerHTML = issues.map(i => `<tr><td>${esc(i.name)}</td><td>${fmt(`${i.day}T12:00:00+08:00`, { weekday: 'short', month: 'short', day: 'numeric' })}</td><td>${i.issue}</td></tr>`).join('') || '<tr><td colspan="3">No missing logs in the last 14 days.</td></tr>';
+}
 function modal({ title, message = '', input = null, ok = 'OK', danger = false, cancel = true }) {
   return new Promise(res => {
     const d = $('modal'), i = $('mi'), o = $('mo');
@@ -234,14 +286,14 @@ async function delPunch(id) {
   if (!reason) return;
   const { data, error } = await db.rpc('admin_delete_punches', { p_ids: [id], p_reason: reason });
   if (error) return say('Could not delete', error.message);
-  await removePhotos(data); loadPunches(); loadAudit();
+  await removePhotos(data); loadPunches(); loadAudit(); loadDash();
 }
 async function delEmp(id, name) {
   const reason = await modal({ title: `Delete ${name}?`, message: 'This permanently deletes the employee and all of their time logs. It cannot be undone. A record with your reason is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete employee', danger: true });
   if (!reason) return;
   const { data, error } = await db.rpc('admin_delete_employee', { p_id: id, p_reason: reason });
   if (error) return say('Could not delete', error.message);
-  await removePhotos(data); loadEmps(); loadPunches(); loadAudit();
+  await removePhotos(data); loadEmps(); loadPunches(); loadAudit(); loadDash();
 }
 function auditText(a, d) {
   const w = d.reason ? ` | Reason: ${d.reason}` : '';

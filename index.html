@@ -22,7 +22,7 @@ video{width:100%;max-width:420px;aspect-ratio:4/3;object-fit:cover;border-radius
 .dots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--mut)}.dots i.on{background:var(--ink);border-color:var(--ink)}
 .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .keys button{height:72px;font-size:28px;border-radius:14px;border:1px solid var(--line);background:var(--bg);touch-action:manipulation}
-.keys button:active{transform:scale(.96)}.keys .go{background:var(--in);color:#fff;border-color:var(--in)}
+.keys button:active{transform:scale(.96)}.io{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.io button{height:76px;font-size:24px;font-weight:700;border:0;border-radius:14px;color:#fff;touch-action:manipulation}.io .in{background:var(--in)}.io .out{background:var(--out)}.io button:active{transform:scale(.96)}
 #msg{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:24px;background:var(--in);color:#fff}
 #msg.show{display:grid}#msg.in{background:var(--in)}#msg.out{background:var(--out)}#msg.bad{background:var(--bad)}
 #msg h1{font-size:clamp(36px,7vw,72px);margin:0 0 8px}#msg p{font-size:28px;margin:0}
@@ -45,9 +45,9 @@ dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);co
   <div>
     <div class="clock" id="clock"></div><div class="date" id="date"></div>
     <video id="cam" playsinline muted></video>
-    <div class="hint" id="hint">Enter your 5-digit PIN, then press Punch. Your photo is taken as proof.</div>
+    <div class="hint" id="hint">Enter your 5-digit PIN, then press Time In or Time Out. Your photo is taken as proof.</div>
   </div>
-  <div class="pad"><div class="dots" id="dots"></div><div class="keys" id="keys"></div></div>
+  <div class="pad"><div class="dots" id="dots"></div><div class="keys" id="keys"></div><div class="io" id="io"><button data-io="in" class="in">Time In</button><button data-io="out" class="out">Time Out</button></div></div>
   <div id="msg"><div><h1 id="mh"></h1><p id="mp"></p></div></div>
 </div>
 
@@ -69,9 +69,9 @@ function tick() { const n = new Date(); $('clock').textContent = fmt(n, {hour:'n
 function show(cls, h, p) { $('msg').className = 'show ' + cls; $('mh').textContent = h; $('mp').textContent = p; }
 function frame(w) { const v = $('cam'), c = document.createElement('canvas'); c.width = w; c.height = Math.round(w * v.videoHeight / v.videoWidth); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c; }
 
-async function submit(code) {
+async function submit(code, kind) {
   if (busy) return;
-  if (code.length !== 5) { show('bad', 'PIN needed', 'Enter your 5-digit PIN, then press Punch.'); setTimeout(() => { $('msg').className = ''; }, 2000); return; }
+  if (code.length !== 5) { show('bad', 'PIN needed', 'Enter your 5-digit PIN, then press Time In or Time Out.'); setTimeout(() => { $('msg').className = ''; }, 2000); return; }
   busy = true;
   const hint = $('hint'), idle = hint.textContent;
   try {
@@ -82,7 +82,7 @@ async function submit(code) {
     const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.jpg`;
     const up = await db.storage.from('selfies').upload(path, blob, { contentType: 'image/jpeg' });
     if (up.error) throw up.error;
-    const { data, error } = await db.rpc('punch', { p_code: code, p_method: 'pin', p_photo: path });
+    const { data, error } = await db.rpc('punch', { p_code: code, p_kind: kind, p_photo: path });
     if (error) throw error;
     show(data.kind, data.kind === 'in' ? 'Time in recorded' : 'Time out recorded', `${data.name} · ${fmt(data.at, {hour:'numeric', minute:'2-digit'})}`);
   } catch (e) { show('bad', 'Not recorded', e.message || 'Check the connection and try again.'); }
@@ -93,12 +93,13 @@ async function submit(code) {
 
 async function startKiosk() {
   $('kiosk').hidden = false; dots(); tick(); setInterval(tick, 1000);
-  $('keys').innerHTML = [1,2,3,4,5,6,7,8,9,'Clear',0,'Punch'].map(k => `<button data-k="${k}" class="${k === 'Punch' ? 'go' : ''}">${k}</button>`).join('');
+  $('keys').innerHTML = [1,2,3,4,5,6,7,8,9,'Clear',0,'Back'].map(k => `<button data-k="${k}">${k === 'Back' ? '\u232b' : k}</button>`).join('');
   $('keys').onclick = e => {
     const k = e.target.dataset.k; if (k === undefined || busy) return;
-    if (k === 'Clear') pin = ''; else if (k === 'Punch') return submit(pin); else if (pin.length < 5) pin += k;
+    if (k === 'Clear') pin = ''; else if (k === 'Back') pin = pin.slice(0, -1); else if (pin.length < 5) pin += k;
     dots();
   };
+  $('io').onclick = e => { const k = e.target.dataset.io; if (k) submit(pin, k); };
   try {
     const v = $('cam');
     v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });

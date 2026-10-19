@@ -4,74 +4,188 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b3d2c">
 <title>Enrich Time Clock</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
-:root{--bg:#eef1ee;--ink:#172321;--mut:#5c6b68;--card:#fff;--line:#d3dbd8;--in:#10543a;--out:#3b4ba8;--bad:#a8321f}
-@media(prefers-color-scheme:dark){:root{--bg:#121a19;--ink:#e8efec;--mut:#98a9a5;--card:#1b2625;--line:#2c3a38;--in:#4fb868;--out:#8c98ee;--bad:#f08b78}}
-*{box-sizing:border-box}html,body{margin:0;height:100%}
-body{font:16px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+:root{
+  --bg:#f1f4f2;--ink:#0f1c19;--mut:#64736f;--card:#ffffff;--line:#e2e8e5;--soft:#f6f8f7;
+  --brand:#0f5a3f;--brand2:#1f8a5b;--in:#0f7a4f;--out:#4453c4;--bad:#c23b27;
+  --in-bg:#e3f5ec;--out-bg:#e8eafc;--bad-bg:#fde9e5;--ab-bg:#eef1ef;
+  --shadow:0 1px 2px rgba(15,28,25,.05),0 8px 28px rgba(15,28,25,.07);
+  --ring:0 0 0 4px rgba(31,138,91,.18);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0c1413;--ink:#e9f1ee;--mut:#8fa29d;--card:#152120;--line:#233431;--soft:#101b1a;
+  --brand:#2fb36d;--brand2:#2fb36d;--in:#4fd08a;--out:#9aa6ff;--bad:#ff8d78;
+  --in-bg:#12372a;--out-bg:#1d2350;--bad-bg:#3d1c16;--ab-bg:#1b2827;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{font:16px/1.45 "Inter",-apple-system,"Segoe UI",system-ui,Roboto,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);-webkit-font-smoothing:antialiased}
 button,input{font:inherit;color:inherit}
-#kiosk{height:100%;display:grid;grid-template-columns:1fr 1fr;gap:32px;padding:32px;max-width:1100px;margin:auto;align-items:center}
-.clock{font-size:clamp(56px,9vw,104px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
-.date{color:var(--mut);font-size:20px;margin:6px 0 20px}
-video{width:100%;max-width:420px;aspect-ratio:4/3;object-fit:cover;border-radius:16px;background:#000;transform:scaleX(-1)}
-.hint{color:var(--mut);margin-top:10px}.hint.snap{color:var(--in);font-weight:700;font-size:28px}
-.pad{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;max-width:380px;justify-self:center;width:100%}
-.dots{display:flex;gap:14px;justify-content:center;height:28px;margin-bottom:16px}
-.dots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--mut)}.dots i.on{background:var(--ink);border-color:var(--ink)}
-.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.keys button{height:72px;font-size:28px;border-radius:14px;border:1px solid var(--line);background:var(--bg);touch-action:manipulation}
-.keys button:active{transform:scale(.96)}.io{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.io button{height:76px;font-size:24px;font-weight:700;border:0;border-radius:14px;color:#fff;touch-action:manipulation}.io .in{background:var(--in)}.io .out{background:var(--out)}.io button:active{transform:scale(.96)}
-#msg{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:24px;background:var(--in);color:#fff}
-#msg.show{display:grid}#msg.in{background:var(--in)}#msg.out{background:var(--out)}#msg.bad{background:var(--bad)}
-#msg h1{font-size:clamp(36px,7vw,72px);margin:0 0 8px}#msg p{font-size:28px;margin:0}
-@media(max-width:760px){#kiosk{grid-template-columns:1fr;padding:16px}}
-.brand{display:inline-block;background:#fff;border-radius:14px;padding:8px 16px;margin-bottom:18px}.brand img{display:block;height:56px;width:auto}
 [hidden]{display:none!important}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 26px}
-.stat{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--ink);border-radius:16px;padding:18px 20px}
-.stat b{display:block;font-size:42px;line-height:1.1;font-variant-numeric:tabular-nums}.stat span{color:var(--mut)}
-.stat.g{border-top-color:var(--in)}.stat.b{border-top-color:var(--out)}.stat.r{border-top-color:var(--bad)}
-.sub{color:var(--mut);margin:-6px 0 16px}h3.sec{margin:24px 0 10px;font-size:18px}.tag.ab{color:var(--mut)}
-@media(max-width:860px){.cards{grid-template-columns:repeat(2,1fr)}}
+svg.i{width:1.15em;height:1.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ============ KIOSK ============ */
+#kiosk{height:100dvh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);background:var(--bg)}
+.stage{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:18px;padding:clamp(22px,4.5vh,52px) clamp(26px,4.2vw,64px);color:#fff;overflow:hidden;
+  background:
+   radial-gradient(900px 520px at 100% -10%,rgba(74,222,128,.22),transparent 60%),
+   radial-gradient(700px 500px at -10% 110%,rgba(47,179,109,.35),transparent 60%),
+   linear-gradient(155deg,#0a3526 0%,#0f5a3f 60%,#0d4a34 100%);
+  border-radius:0 44px 44px 0}
+.stage::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:26px 26px;mask-image:linear-gradient(180deg,#000,transparent 70%);pointer-events:none}
+.stage>*{position:relative}
+.brand{display:inline-block;background:#fff;border-radius:16px;padding:8px 16px;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.brand img{display:block;height:clamp(34px,5.5vh,50px);width:auto}
+.stage .brand{margin-bottom:clamp(16px,4vh,40px)}
+.clock{display:flex;align-items:baseline;white-space:nowrap;font-size:clamp(60px,14vh,140px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.04em;line-height:.95}
+.clock .cs{opacity:.45;font-weight:500;font-size:.46em;margin-left:.1em;letter-spacing:-.02em}
+.clock .cp{font-size:.26em;font-weight:700;margin-left:.5em;letter-spacing:.06em;padding:.25em .6em;border-radius:99px;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);align-self:center}
+.date{font-size:clamp(16px,2.7vh,26px);opacity:.82;margin-top:14px;font-weight:500}
+.camblock{display:flex;flex-direction:column;align-items:flex-start}
+.cam{position:relative;height:clamp(170px,33vh,390px);aspect-ratio:4/3;max-width:100%;border-radius:32px;overflow:hidden;background:#082a1e;
+  box-shadow:0 0 0 1px rgba(255,255,255,.2),0 0 0 8px rgba(255,255,255,.08),0 24px 60px rgba(0,0,0,.35)}
+.cam video{display:block;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.live{position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:7px;padding:5px 12px 5px 10px;border-radius:99px;background:rgba(10,20,17,.55);backdrop-filter:blur(8px);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.live i{width:8px;height:8px;border-radius:50%;background:#ff5a4d;animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,90,77,.7)}70%{box-shadow:0 0 0 8px rgba(255,90,77,0)}100%{box-shadow:0 0 0 0 rgba(255,90,77,0)}}
+.count{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(90px,20vh,180px);font-weight:700;text-shadow:0 6px 40px rgba(0,0,0,.55);background:radial-gradient(circle,rgba(0,0,0,.0),rgba(0,0,0,0) 60%)}
+.count:not(:empty){background:rgba(8,30,22,.35);animation:pop .8s ease-out infinite}
+@keyframes pop{0%{transform:scale(1.25);opacity:.2}30%{opacity:1}100%{transform:scale(1)}}
+.cam.flash::after{content:"";position:absolute;inset:0;background:#fff;animation:flash .45s ease-out forwards}
+@keyframes flash{from{opacity:.95}to{opacity:0}}
+.hint{margin-top:16px;display:flex;align-items:center;gap:8px;opacity:.8;font-size:15px}
+.hint.snap{opacity:1;font-weight:700;font-size:clamp(18px,3vh,26px)}
+
+.entry{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.pad{width:min(100%,400px);background:var(--card);border:1px solid var(--line);border-radius:36px;box-shadow:var(--shadow);padding:clamp(22px,4vh,40px) clamp(22px,3.4vw,38px);display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2vh,18px)}
+.pad h2{margin:0;font-size:clamp(24px,3.8vh,32px);letter-spacing:-.02em}
+.sub2{margin:-4px 0 4px;color:var(--mut);text-align:center;font-size:15px}
+.dots{display:flex;gap:14px;height:28px;align-items:center;margin:4px 0 6px}
+.dots i{width:16px;height:16px;border-radius:50%;background:var(--line);transition:background .15s,transform .15s,box-shadow .15s}
+.dots i.on{background:var(--brand2);transform:scale(1.2);box-shadow:var(--ring)}
+.dots.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(10px,1.8vh,16px);width:100%}
+.keys button{aspect-ratio:1.18;max-height:clamp(54px,9vh,80px);width:100%;border-radius:22px;border:1px solid var(--line);background:var(--soft);font-size:clamp(22px,3.6vh,30px);font-weight:600;cursor:pointer;touch-action:manipulation;transition:transform .08s,background .12s,box-shadow .12s;box-shadow:0 1px 0 rgba(15,28,25,.04)}
+.keys button.aux{font-size:clamp(14px,2.1vh,18px);font-weight:600;color:var(--mut);background:transparent;border-color:transparent}
+.keys button:hover{background:var(--card);box-shadow:0 4px 14px rgba(15,28,25,.1)}
+.keys button:active{background:var(--brand);color:#fff;border-color:var(--brand);transform:scale(.94)}
+.io{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;margin-top:clamp(4px,1.4vh,12px)}
+.io button{display:flex;align-items:center;justify-content:center;gap:10px;height:clamp(56px,9vh,74px);font-size:clamp(17px,2.6vh,21px);font-weight:700;border:0;border-radius:22px;color:#fff;cursor:pointer;touch-action:manipulation;transition:transform .1s,filter .15s,box-shadow .15s}
+.io .in{background:linear-gradient(135deg,#1f8a5b,#0f5a3f);box-shadow:0 10px 24px rgba(15,90,63,.35)}
+.io .out{background:linear-gradient(135deg,#5b6af0,#3b47b5);box-shadow:0 10px 24px rgba(59,71,181,.35)}
+.io button:hover{filter:brightness(1.07)}.io button:active{transform:scale(.96)}
+
+#msg{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:24px;color:#fff;z-index:50;overflow:hidden}
+#msg.show{display:grid;animation:fadein .25s ease-out}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+#msg.in{background:radial-gradient(800px 500px at 50% 0,rgba(74,222,128,.35),transparent 60%),linear-gradient(160deg,#0f6b49,#0a3d2b)}
+#msg.out{background:radial-gradient(800px 500px at 50% 0,rgba(140,152,255,.4),transparent 60%),linear-gradient(160deg,#4756d4,#272f7c)}
+#msg.bad{background:radial-gradient(800px 500px at 50% 0,rgba(255,160,140,.35),transparent 60%),linear-gradient(160deg,#c23b27,#7a1f12)}
+#msg::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:rgba(255,255,255,.6);transform-origin:left;animation:drain var(--d,3.5s) linear forwards}
+@keyframes drain{to{transform:scaleX(0)}}
+.res{animation:rise .45s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes rise{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+.res img{width:clamp(130px,24vh,210px);aspect-ratio:1;border-radius:50%;object-fit:cover;transform:scaleX(-1);border:6px solid rgba(255,255,255,.65);box-shadow:0 0 0 14px rgba(255,255,255,.12),0 24px 50px rgba(0,0,0,.3);margin-bottom:28px}
+.res .ico{width:clamp(96px,16vh,140px);aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:clamp(56px,10vh,90px);font-weight:700;margin:0 auto 24px;box-shadow:0 0 0 14px rgba(255,255,255,.1)}
+.res h1{margin:0 0 12px;font-size:clamp(30px,6vh,56px);letter-spacing:-.02em}
+.res p{margin:0;font-size:clamp(20px,3.4vh,30px);opacity:.9}.res p.n{font-size:clamp(28px,5vh,46px);font-weight:700;opacity:1}
+
+@media(max-aspect-ratio:1/1){
+  #kiosk{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .stage{flex-direction:row;align-items:center;padding:20px 28px;border-radius:0 0 36px 36px}
+  .stage .brand{margin-bottom:12px}
+  .cam{height:clamp(130px,19vh,230px)}.hint{display:none}.clock{font-size:clamp(46px,8vh,84px)}
+}
+
+/* ============ ADMIN ============ */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:0 0 28px}
+.stat{position:relative;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px 22px;box-shadow:var(--shadow);display:flex;align-items:center;gap:16px}
+.stat .ic{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:var(--ab-bg);font-size:22px;flex:none}
+.stat b{display:block;font-size:34px;line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{color:var(--mut);font-size:14px}
+.stat.g .ic{background:var(--in-bg);color:var(--in)}
+.stat.b .ic{background:var(--out-bg);color:var(--out)}
+.stat.r .ic{background:var(--bad-bg);color:var(--bad)}
+.sub{color:var(--mut);margin:-4px 0 16px}
+h3.sec{margin:30px 0 4px;font-size:18px;letter-spacing:-.01em}
+@media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)}}
 #admin{padding:0}
-.login{max-width:520px;margin:10vh auto;padding:24px}
-.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:22px 16px;background:var(--card);border-right:1px solid var(--line)}
-.nav{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-left:4px solid transparent;border-radius:10px;background:none;color:var(--ink);font-size:16px;cursor:pointer}
-.nav:hover{background:var(--bg)}.nav.on{background:var(--bg);border-left-color:var(--in);font-weight:700}
+.login{max-width:440px;margin:9vh auto;padding:36px 32px;background:var(--card);border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow)}
+.login h2{margin:6px 0 4px;font-size:26px;letter-spacing:-.02em}
+.login .row{flex-direction:column;align-items:stretch}
+.login .btn{padding:13px}
+.shell{display:grid;grid-template-columns:262px 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px;padding:22px 16px;background:var(--card);border-right:1px solid var(--line)}
+.side .brand{margin:0 0 20px;box-shadow:none;border:1px solid var(--line);padding:6px 12px}
+.side .brand img{height:42px}
+.nav{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border:0;border-radius:14px;background:none;color:var(--mut);font-size:15px;font-weight:600;cursor:pointer;transition:background .12s,color .12s}
+.nav:hover{background:var(--soft);color:var(--ink)}
+.nav.on{background:var(--in-bg);color:var(--in)}
+.nav *{pointer-events:none}
 .side .so{margin-top:auto}
-.main{padding:28px 32px;max-width:1040px;width:100%}.main h2{margin:0 0 14px;font-size:24px}
-@media(max-width:860px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line)}.side .brand{margin:0 12px 0 0}.side .so{margin:0 0 0 auto}.nav{width:auto}.main{padding:18px}}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
-input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-.btn{padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
-.btn.p{background:var(--in);color:#fff;border-color:var(--in)}
-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden}
-th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600}
-td img{width:56px;height:42px;object-fit:cover;border-radius:6px}
-.tag{font-weight:600}.tag.in{color:var(--in)}.tag.out{color:var(--out)}
-.wrap{overflow-x:auto}
-dialog{width:min(92vw,440px);border:0;border-radius:20px;padding:26px;background:var(--card);color:var(--ink);box-shadow:0 24px 70px rgba(8,20,16,.4)}
-dialog[open]{animation:pop .16s ease-out}
-dialog::backdrop{background:rgba(8,20,16,.55);backdrop-filter:blur(3px)}
-@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
-dialog h3{margin:0 0 6px;font-size:21px;line-height:1.25}dialog p{margin:0 0 16px;color:var(--mut)}
-dialog input{width:100%;font-size:17px;padding:12px 14px}dialog input.err{border-color:var(--bad);outline:2px solid var(--bad)}
-.mb{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
+.main{padding:32px 36px 60px;max-width:1120px;width:100%}
+.main h2{margin:0 0 6px;font-size:28px;letter-spacing:-.025em}
+@media(max-width:860px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line)}.side .brand{margin:0 12px 0 0}.side .so{margin:0 0 0 auto}.nav{width:auto}.main{padding:20px 16px}}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
+input{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);outline:0;transition:border-color .12s,box-shadow .12s}
+input:focus{border-color:var(--brand2);box-shadow:var(--ring)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:14px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600;transition:background .12s,transform .08s,box-shadow .12s}
+.btn:hover{background:var(--soft)}.btn:active{transform:scale(.97)}
+.btn.p{background:linear-gradient(135deg,var(--brand2),var(--brand));color:#fff;border-color:transparent;box-shadow:0 6px 16px rgba(15,90,63,.25)}
+.btn.p:hover{filter:brightness(1.07)}
+.btn.sm{padding:7px 12px;border-radius:11px;font-size:14px}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);margin-top:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:14px 18px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.07em;background:var(--soft)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--soft)}
+td img{width:56px;height:42px;object-fit:cover;border-radius:10px;display:block}
+.who2{display:flex;align-items:center;gap:12px;font-weight:600}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--in-bg);color:var(--in);font-weight:700;font-size:14px;flex:none}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:13px;font-weight:700}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.in{background:var(--in-bg);color:var(--in)}
+.pill.out{background:var(--out-bg);color:var(--out)}
+.pill.ab{background:var(--ab-bg);color:var(--mut)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.tag{font-weight:600}
+dialog{width:min(92vw,440px);border:0;border-radius:26px;padding:28px;background:var(--card);color:var(--ink);box-shadow:0 30px 80px rgba(8,20,16,.45)}
+dialog[open]{animation:dpop .18s ease-out}
+dialog::backdrop{background:rgba(8,20,16,.55);backdrop-filter:blur(4px)}
+@keyframes dpop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+dialog h3{margin:0 0 6px;font-size:21px;line-height:1.25;letter-spacing:-.01em}dialog p{margin:0 0 16px;color:var(--mut)}
+dialog input{width:100%;font-size:17px;padding:13px 15px}dialog input.err{border-color:var(--bad);box-shadow:0 0 0 4px rgba(194,59,39,.18)}
+.mb{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad);box-shadow:none}
 </style>
 </head>
 <body>
 <div id="kiosk" hidden>
-  <div>
-    <div id="brandK"></div>
-    <div class="clock" id="clock"></div><div class="date" id="date"></div>
-    <video id="cam" playsinline muted></video>
-    <div class="hint" id="hint">Enter your 5-digit PIN, then press Time In or Time Out. Your photo is taken as proof.</div>
-  </div>
-  <div class="pad"><div class="dots" id="dots"></div><div class="keys" id="keys"></div><div class="io" id="io"><button data-io="in" class="in">Time In</button><button data-io="out" class="out">Time Out</button></div></div>
-  <div id="msg"><div><h1 id="mh"></h1><p id="mp"></p></div></div>
+  <section class="stage">
+    <div class="who"><div id="brandK"></div>
+      <div class="clock"><span id="ct"></span><span class="cs" id="cs"></span><span class="cp" id="cp"></span></div>
+      <div class="date" id="date"></div></div>
+    <div class="camblock">
+      <div class="cam" id="camwrap"><video id="cam" playsinline muted></video><span class="live"><i></i>Live</span><div class="count" id="count"></div></div>
+      <div class="hint" id="hint">A photo is taken with every punch for proof.</div>
+    </div>
+  </section>
+  <section class="entry">
+    <div class="pad">
+      <h2>Enter your PIN</h2><p class="sub2">Then choose Time In or Time Out.</p>
+      <div class="dots" id="dots"></div><div class="keys" id="keys"></div>
+      <div class="io" id="io">
+        <button data-io="in" class="in"><svg class="i" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>Time In</button>
+        <button data-io="out" class="out"><svg class="i" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>Time Out</button>
+      </div>
+    </div>
+  </section>
+  <div id="msg"><div class="res"><img id="mimg" alt="" hidden><div class="ico" id="mico" hidden>!</div><h1 id="mh"></h1><p class="n" id="mp"></p><p id="mp2"></p></div></div>
 </div>
 
 <div id="admin" hidden></div>
@@ -87,22 +201,51 @@ const brand = () => `<div class="brand"><img src="${LOGO}" alt="Enrich Agrifarms
 const TZ = 'Asia/Manila';
 const fmt = (d, o) => new Date(d).toLocaleString('en-PH', { timeZone: TZ, ...o });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ini = n => esc((String(n).trim()[0] || '?').toUpperCase());
+const IC = {
+  dash:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  logs:'<svg class="i" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>',
+  emps:'<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>',
+  hist:'<svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>',
+  out:'<svg class="i" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+  users:'<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+  check:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
+  clock:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  warn:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  cam:'<svg class="i" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
+};
 
 /* ---------- Kiosk ---------- */
 let pin = '', busy = false;
 function dots() { $('dots').innerHTML = Array.from({length: 5}, (_, i) => `<i class="${i < pin.length ? 'on' : ''}"></i>`).join(''); }
-function tick() { const n = new Date(); $('clock').textContent = fmt(n, {hour:'numeric', minute:'2-digit', second:'2-digit'}); $('date').textContent = fmt(n, {weekday:'long', month:'long', day:'numeric'}); }
-function show(cls, h, p) { $('msg').className = 'show ' + cls; $('mh').textContent = h; $('mp').textContent = p; }
+const fmtClock = new Intl.DateTimeFormat('en-PH', { timeZone: TZ, hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+function tick() {
+  const n = new Date(), p = {}; fmtClock.formatToParts(n).forEach(x => p[x.type] = x.value);
+  $('ct').textContent = `${p.hour}:${p.minute}`; $('cs').textContent = `:${p.second}`; $('cp').textContent = (p.dayPeriod || '').toUpperCase();
+  $('date').textContent = fmt(n, {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+}
+let lastUrl = '';
+function show(cls, h, p = '', p2 = '', photo = '', dur = 3.5) {
+  const m = $('msg'); m.className = 'show ' + cls; m.style.setProperty('--d', dur + 's');
+  $('mh').textContent = h; $('mp').textContent = p; $('mp2').textContent = p2;
+  $('mimg').hidden = !photo; if (photo) $('mimg').src = photo; $('mico').hidden = !!photo;
+}
+function hide() { $('msg').className = ''; if (lastUrl) { URL.revokeObjectURL(lastUrl); lastUrl = ''; } }
 function frame(w) { const v = $('cam'), c = document.createElement('canvas'); c.width = w; c.height = Math.round(w * v.videoHeight / v.videoWidth); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c; }
 
 async function submit(code, kind) {
   if (busy) return;
-  if (code.length !== 5) { show('bad', 'PIN needed', 'Enter your 5-digit PIN, then press Time In or Time Out.'); setTimeout(() => { $('msg').className = ''; }, 2000); return; }
+  if (code.length !== 5) {
+    const d = $('dots'); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake');
+    show('bad', 'PIN needed', 'Enter your 5-digit PIN first.', 'Then press Time In or Time Out.', '', 2.5); setTimeout(hide, 2500); return;
+  }
   busy = true;
-  const hint = $('hint'), idle = hint.textContent;
+  const hint = $('hint'), idle = hint.textContent, cam = $('camwrap');
   try {
-    hint.className = 'hint snap';
-    for (let i = 3; i > 0; i--) { hint.textContent = 'Look at the camera... ' + i; await new Promise(r => setTimeout(r, 800)); }
+    hint.className = 'hint snap'; hint.textContent = 'Look at the camera';
+    for (let i = 3; i > 0; i--) { $('count').textContent = i; await new Promise(r => setTimeout(r, 800)); }
+    $('count').textContent = '';
+    cam.classList.remove('flash'); void cam.offsetWidth; cam.classList.add('flash');
     const blob = await new Promise(r => frame(320).toBlob(r, 'image/jpeg', .6));
     hint.className = 'hint'; hint.textContent = 'Saving...';
     const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.jpg`;
@@ -110,22 +253,30 @@ async function submit(code, kind) {
     if (up.error) throw up.error;
     const { data, error } = await db.rpc('punch', { p_code: code, p_kind: kind, p_photo: path });
     if (error) throw error;
-    show(data.kind, data.kind === 'in' ? 'Time in recorded' : 'Time out recorded', `${data.name} · ${fmt(data.at, {hour:'numeric', minute:'2-digit'})}`);
-  } catch (e) { show('bad', 'Not recorded', e.message || 'Check the connection and try again.'); }
+    lastUrl = URL.createObjectURL(blob);
+    show(data.kind, data.kind === 'in' ? 'Time in recorded' : 'Time out recorded', data.name, fmt(data.at, {hour:'numeric', minute:'2-digit'}), lastUrl);
+  } catch (e) { $('count').textContent = ''; show('bad', 'Not recorded', e.message || 'Check the connection and try again.'); }
   hint.className = 'hint'; hint.textContent = idle;
   pin = ''; dots();
-  setTimeout(() => { $('msg').className = ''; busy = false; }, 3500);
+  setTimeout(() => { hide(); busy = false; }, 3500);
 }
 
 async function startKiosk() {
+  document.body.style.overflow = 'hidden';
   $('kiosk').hidden = false; $('brandK').innerHTML = brand(); dots(); tick(); setInterval(tick, 1000);
-  $('keys').innerHTML = [1,2,3,4,5,6,7,8,9,'Clear',0,'Back'].map(k => `<button data-k="${k}">${k === 'Back' ? '\u232b' : k}</button>`).join('');
-  $('keys').onclick = e => {
-    const k = e.target.dataset.k; if (k === undefined || busy) return;
+  $('keys').innerHTML = [1,2,3,4,5,6,7,8,9,'Clear',0,'Back'].map(k => `<button data-k="${k}"${typeof k === 'string' ? ' class="aux"' : ''}>${k === 'Back' ? '\u232b' : k}</button>`).join('');
+  const press = k => {
+    if (busy) return;
     if (k === 'Clear') pin = ''; else if (k === 'Back') pin = pin.slice(0, -1); else if (pin.length < 5) pin += k;
     dots();
   };
-  $('io').onclick = e => { const k = e.target.dataset.io; if (k) submit(pin, k); };
+  $('keys').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.k !== undefined) press(b.dataset.k); };
+  $('io').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.io) submit(pin, b.dataset.io); };
+  addEventListener('keydown', e => {
+    if (/^\d$/.test(e.key)) press(e.key);
+    else if (e.key === 'Backspace') press('Back');
+    else if (e.key === 'Escape') press('Clear');
+  });
   try {
     const v = $('cam');
     v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });
@@ -136,26 +287,28 @@ async function startKiosk() {
 /* ---------- Admin (open this page with #admin) ---------- */
 let rows = [];
 async function startAdmin() {
+  document.body.style.overflow = '';
   $('admin').hidden = false;
   const { data } = await db.auth.getSession();
   data.session ? adminHome() : adminLogin();
 }
 function adminLogin(msg = '') {
-  $('admin').innerHTML = `<div class="login">${brand()}<h2>Admin sign in</h2><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn p" id="si">Sign in</button></div><p>${esc(msg)}</p></div>`;
-  $('si').onclick = async () => {
+  $('admin').innerHTML = `<div class="login">${brand()}<h2>Admin sign in</h2><p class="sub">Sign in to manage attendance.</p><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn p" id="si">Sign in</button></div><p style="color:var(--bad);margin:0">${esc(msg)}</p></div>`;
+  const go = async () => {
     const { error } = await db.auth.signInWithPassword({ email: $('em').value, password: $('pw').value });
     error ? adminLogin(error.message) : adminHome();
   };
+  $('si').onclick = go; $('pw').onkeydown = e => { if (e.key === 'Enter') go(); };
 }
 async function adminHome() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
   $('admin').innerHTML = `<div class="shell">
   <aside class="side">${brand()}
-    <button class="nav on" data-v="dash">Dashboard</button>
-    <button class="nav" data-v="logs">Employee logs</button>
-    <button class="nav" data-v="emps">Employee management</button>
-    <button class="nav" data-v="hist">History</button>
-    <button class="btn so" id="so">Sign out</button>
+    <button class="nav on" data-v="dash">${IC.dash}Dashboard</button>
+    <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
+    <button class="nav" data-v="emps">${IC.emps}Employee management</button>
+    <button class="nav" data-v="hist">${IC.hist}History</button>
+    <button class="btn so" id="so">${IC.out}Sign out</button>
   </aside>
   <main class="main">
     <section id="v-dash"><h2>Dashboard</h2><p class="sub" id="dsub"></p>
@@ -178,7 +331,7 @@ async function adminHome() {
     </section>
   </main></div>`;
   document.querySelector('.side').onclick = e => {
-    const v = e.target.dataset.v; if (!v) return;
+    const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
     ['dash', 'logs', 'emps', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
     scrollTo(0, 0); if (v === 'dash') loadDash();
@@ -204,7 +357,7 @@ async function loadPunches() {
   const paths = data.map(r => r.photo_path).filter(Boolean);
   const urls = {};
   if (paths.length) { const s = await db.storage.from('selfies').createSignedUrls(paths, 3600); (s.data || []).forEach(x => urls[x.path] = x.signedUrl); }
-  $('tb').innerHTML = data.map(r => `<tr><td>${fmt(r.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td>${esc(r.employees.name)}</td><td class="tag ${r.kind}">${r.kind === 'in' ? 'Time in' : 'Time out'}</td><td>${r.method.toUpperCase()}</td><td>${urls[r.photo_path] ? `<img src="${urls[r.photo_path]}" alt="Selfie">` : ''}</td><td><button class="btn" data-del="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No punches in this range.</td></tr>';
+  $('tb').innerHTML = data.map(r => `<tr><td>${fmt(r.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td><div class="who2"><span class="av">${ini(r.employees.name)}</span>${esc(r.employees.name)}</div></td><td><span class="pill ${r.kind}">${r.kind === 'in' ? 'Time in' : 'Time out'}</span></td><td>${r.method.toUpperCase()}</td><td>${urls[r.photo_path] ? `<img src="${urls[r.photo_path]}" alt="Selfie">` : ''}</td><td><button class="btn sm" data-del="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No punches in this range.</td></tr>';
 }
 function exportCsv() {
   const lines = ['Date,Time,Employee,Punch,Method', ...rows.map(r => [fmt(r.punched_at, {year:'numeric', month:'2-digit', day:'2-digit'}), fmt(r.punched_at, {hour:'2-digit', minute:'2-digit', hour12:false}), `"${r.employees.name}"`, r.kind, r.method].join(','))];
@@ -212,7 +365,7 @@ function exportCsv() {
 }
 async function loadEmps() {
   const { data } = await db.from('employees').select('id,name,active,pin_plain').order('name');
-  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.pin_plain ? `<button class="btn" data-pin="${e.pin_plain}">Show</button>` : 'Not set'}</td><td>${e.active ? 'Active' : 'Inactive'}</td><td><button class="btn" data-chg="${e.id}" data-name="${esc(e.name)}">Change PIN</button> <button class="btn" data-eid="${e.id}" data-name="${esc(e.name)}">Delete</button></td></tr>`).join('');
+  $('eb').innerHTML = (data || []).map(e => `<tr><td><div class="who2"><span class="av">${ini(e.name)}</span>${esc(e.name)}</div></td><td>${e.pin_plain ? `<button class="btn sm" data-pin="${e.pin_plain}">Show</button>` : 'Not set'}</td><td><span class="pill ${e.active ? 'in' : 'ab'}">${e.active ? 'Active' : 'Inactive'}</span></td><td style="text-align:right"><button class="btn sm" data-chg="${e.id}" data-name="${esc(e.name)}">Change PIN</button> <button class="btn sm" data-eid="${e.id}" data-name="${esc(e.name)}">Delete</button></td></tr>`).join('');
 }
 async function addEmp() {
   const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
@@ -248,13 +401,13 @@ async function loadDash() {
     });
   });
   const present = rows.filter(r => r.status !== 'Absent').length;
-  const card = (n, label, c = '') => `<div class="stat ${c}"><b>${n}</b><span>${label}</span></div>`;
-  $('dsub').textContent = fmt(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
-  $('cards').innerHTML = card(emps.length, 'Active employees') + card(present, 'Present today', 'g') + card(emps.length - present, 'Absent today', 'b') + card(issues.length, 'Missing logs', 'r');
+  const card = (n, label, ic, c = '') => `<div class="stat ${c}"><div class="ic">${ic}</div><div><b>${n}</b><span>${label}</span></div></div>`;
+  $('dsub').textContent = fmt(new Date(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  $('cards').innerHTML = card(emps.length, 'Active employees', IC.users) + card(present, 'Present today', IC.check, 'g') + card(emps.length - present, 'Absent today', IC.clock, 'b') + card(issues.length, 'Missing logs', IC.warn, 'r');
   const t = x => x ? fmt(x, { hour: 'numeric', minute: '2-digit' }) : '-';
-  $('tdb').innerHTML = rows.map(r => `<tr><td>${esc(r.name)}</td><td class="tag ${r.status === 'Timed in' ? 'in' : r.status === 'Timed out' ? 'out' : 'ab'}">${r.status}</td><td>${t(r.tin)}</td><td>${t(r.tout)}</td></tr>`).join('') || '<tr><td colspan="4">No active employees yet.</td></tr>';
+  $('tdb').innerHTML = rows.map(r => `<tr><td><div class="who2"><span class="av">${ini(r.name)}</span>${esc(r.name)}</div></td><td><span class="pill ${r.status === 'Timed in' ? 'in' : r.status === 'Timed out' ? 'out' : 'ab'}">${r.status}</span></td><td>${t(r.tin)}</td><td>${t(r.tout)}</td></tr>`).join('') || '<tr><td colspan="4">No active employees yet.</td></tr>';
   issues.sort((a, b) => b.day.localeCompare(a.day));
-  $('mdb').innerHTML = issues.map(i => `<tr><td>${esc(i.name)}</td><td>${fmt(`${i.day}T12:00:00+08:00`, { weekday: 'short', month: 'short', day: 'numeric' })}</td><td>${i.issue}</td></tr>`).join('') || '<tr><td colspan="3">No missing logs in the last 14 days.</td></tr>';
+  $('mdb').innerHTML = issues.map(i => `<tr><td><div class="who2"><span class="av">${ini(i.name)}</span>${esc(i.name)}</div></td><td>${fmt(`${i.day}T12:00:00+08:00`, { weekday: 'short', month: 'short', day: 'numeric' })}</td><td><span class="pill bad">${i.issue}</span></td></tr>`).join('') || '<tr><td colspan="3">No missing logs in the last 14 days.</td></tr>';
 }
 function modal({ title, message = '', input = null, ok = 'OK', danger = false, cancel = true }) {
   return new Promise(res => {

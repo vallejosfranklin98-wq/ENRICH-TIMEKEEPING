@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Time Clock</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<style>
+:root{--bg:#eef1ee;--ink:#172321;--mut:#5c6b68;--card:#fff;--line:#d3dbd8;--in:#0e6b63;--out:#3b4ba8;--bad:#a8321f}
+@media(prefers-color-scheme:dark){:root{--bg:#121a19;--ink:#e8efec;--mut:#98a9a5;--card:#1b2625;--line:#2c3a38;--in:#3fb8aa;--out:#8c98ee;--bad:#f08b78}}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font:16px/1.4 -apple-system,"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button,input{font:inherit;color:inherit}
+#kiosk{height:100%;display:grid;grid-template-columns:1fr 1fr;gap:32px;padding:32px;max-width:1100px;margin:auto;align-items:center}
+.clock{font-size:clamp(56px,9vw,104px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
+.date{color:var(--mut);font-size:20px;margin:6px 0 20px}
+video{width:100%;max-width:420px;aspect-ratio:4/3;object-fit:cover;border-radius:16px;background:#000;transform:scaleX(-1)}
+.hint{color:var(--mut);margin-top:10px}
+.pad{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;max-width:380px;justify-self:center;width:100%}
+.dots{display:flex;gap:14px;justify-content:center;height:28px;margin-bottom:16px}
+.dots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--mut)}.dots i.on{background:var(--ink);border-color:var(--ink)}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.keys button{height:72px;font-size:28px;border-radius:14px;border:1px solid var(--line);background:var(--bg);touch-action:manipulation}
+.keys button:active{transform:scale(.96)}.keys .go{background:var(--in);color:#fff;border-color:var(--in)}
+#msg{position:fixed;inset:0;display:none;place-items:center;text-align:center;padding:24px;background:var(--in);color:#fff}
+#msg.show{display:grid}#msg.in{background:var(--in)}#msg.out{background:var(--out)}#msg.bad{background:var(--bad)}
+#msg h1{font-size:clamp(36px,7vw,72px);margin:0 0 8px}#msg p{font-size:28px;margin:0}
+@media(max-width:760px){#kiosk{grid-template-columns:1fr;padding:16px}}
+#admin{max-width:1000px;margin:auto;padding:24px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.btn{padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.btn.p{background:var(--in);color:#fff;border-color:var(--in)}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600}
+td img{width:56px;height:42px;object-fit:cover;border-radius:6px}
+.tag{font-weight:600}.tag.in{color:var(--in)}.tag.out{color:var(--out)}
+.wrap{overflow-x:auto}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);text-align:center}
+</style>
+</head>
+<body>
+<div id="kiosk" hidden>
+  <div>
+    <div class="clock" id="clock"></div><div class="date" id="date"></div>
+    <video id="cam" playsinline muted></video>
+    <div class="hint">Hold your QR card up to the camera, or enter your PIN. A photo is taken with every punch.</div>
+  </div>
+  <div class="pad"><div class="dots" id="dots"></div><div class="keys" id="keys"></div></div>
+  <div id="msg"><div><h1 id="mh"></h1><p id="mp"></p></div></div>
+</div>
+
+<div id="admin" hidden></div>
+
+<script>
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const TZ = 'Asia/Manila';
+const fmt = (d, o) => new Date(d).toLocaleString('en-PH', { timeZone: TZ, ...o });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- Kiosk ---------- */
+let pin = '', busy = false;
+function dots() { $('dots').innerHTML = Array.from({length: 6}, (_, i) => `<i class="${i < pin.length ? 'on' : ''}"></i>`).join(''); }
+function tick() { const n = new Date(); $('clock').textContent = fmt(n, {hour:'numeric', minute:'2-digit', second:'2-digit'}); $('date').textContent = fmt(n, {weekday:'long', month:'long', day:'numeric'}); }
+function show(cls, h, p) { $('msg').className = 'show ' + cls; $('mh').textContent = h; $('mp').textContent = p; }
+function frame(w) { const v = $('cam'), c = document.createElement('canvas'); c.width = w; c.height = Math.round(w * v.videoHeight / v.videoWidth); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c; }
+
+async function submit(code, method) {
+  if (busy || !code) return; busy = true;
+  try {
+    const blob = await new Promise(r => frame(320).toBlob(r, 'image/jpeg', .6));
+    const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.jpg`;
+    const up = await db.storage.from('selfies').upload(path, blob, { contentType: 'image/jpeg' });
+    if (up.error) throw up.error;
+    const { data, error } = await db.rpc('punch', { p_code: code, p_method: method, p_photo: path });
+    if (error) throw error;
+    show(data.kind, data.kind === 'in' ? 'Time in recorded' : 'Time out recorded', `${data.name} · ${fmt(data.at, {hour:'numeric', minute:'2-digit'})}`);
+  } catch (e) { show('bad', 'Not recorded', e.message || 'Check the connection and try again.'); }
+  pin = ''; dots();
+  setTimeout(() => { $('msg').className = ''; busy = false; }, 3500);
+}
+
+async function startKiosk() {
+  $('kiosk').hidden = false; dots(); tick(); setInterval(tick, 1000);
+  $('keys').innerHTML = [1,2,3,4,5,6,7,8,9,'Clear',0,'Punch'].map(k => `<button data-k="${k}" class="${k === 'Punch' ? 'go' : ''}">${k}</button>`).join('');
+  $('keys').onclick = e => {
+    const k = e.target.dataset.k; if (k === undefined || busy) return;
+    if (k === 'Clear') pin = ''; else if (k === 'Punch') return submit(pin, 'pin'); else if (pin.length < 6) pin += k;
+    dots();
+  };
+  try {
+    const v = $('cam');
+    v.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false });
+    await v.play();
+    const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+    setInterval(() => {
+      if (busy || !v.videoWidth) return;
+      c.width = 320; c.height = Math.round(320 * v.videoHeight / v.videoWidth);
+      x.drawImage(v, 0, 0, c.width, c.height);
+      const d = x.getImageData(0, 0, c.width, c.height), r = jsQR(d.data, d.width, d.height);
+      if (r && r.data) submit(r.data, 'qr');
+    }, 300);
+  } catch (e) { show('bad', 'Camera blocked', 'Allow camera access for this site in Safari settings, then reload.'); }
+}
+
+/* ---------- Admin (open this page with #admin) ---------- */
+let rows = [];
+async function startAdmin() {
+  $('admin').hidden = false;
+  const { data } = await db.auth.getSession();
+  data.session ? adminHome() : adminLogin();
+}
+function adminLogin(msg = '') {
+  $('admin').innerHTML = `<h2>Admin sign in</h2><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn p" id="si">Sign in</button></div><p>${esc(msg)}</p>`;
+  $('si').onclick = async () => {
+    const { error } = await db.auth.signInWithPassword({ email: $('em').value, password: $('pw').value });
+    error ? adminLogin(error.message) : adminHome();
+  };
+}
+async function adminHome() {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  $('admin').innerHTML = `<div class="row"><h2 style="margin:0;flex:1">Attendance</h2><button class="btn" id="so">Sign out</button></div>
+  <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
+  <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <h2>Employees</h2>
+  <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="6" placeholder="PIN (4-6 digits)"><button class="btn p" id="ad">Add employee</button></div>
+  <div class="wrap"><table><thead><tr><th>Name</th><th>Status</th><th>QR card</th></tr></thead><tbody id="eb"></tbody></table></div>
+  <dialog id="dlg"><h3 id="dn"></h3><div id="dq"></div><p><button class="btn" onclick="dlg.close()">Close</button> <button class="btn p" onclick="print()">Print</button></p></dialog>`;
+  $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
+  $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
+  loadPunches(); loadEmps();
+}
+async function loadPunches() {
+  const a = new Date(`${$('d1').value}T00:00:00+08:00`), b = new Date(`${$('d2').value}T00:00:00+08:00`); b.setDate(b.getDate() + 1);
+  const { data, error } = await db.from('punches').select('*, employees(name)').gte('punched_at', a.toISOString()).lt('punched_at', b.toISOString()).order('punched_at');
+  if (error) { $('tb').innerHTML = `<tr><td colspan="5">${esc(error.message)}</td></tr>`; return; }
+  rows = data;
+  const paths = data.map(r => r.photo_path).filter(Boolean);
+  const urls = {};
+  if (paths.length) { const s = await db.storage.from('selfies').createSignedUrls(paths, 3600); (s.data || []).forEach(x => urls[x.path] = x.signedUrl); }
+  $('tb').innerHTML = data.map(r => `<tr><td>${fmt(r.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td>${esc(r.employees.name)}</td><td class="tag ${r.kind}">${r.kind === 'in' ? 'Time in' : 'Time out'}</td><td>${r.method.toUpperCase()}</td><td>${urls[r.photo_path] ? `<img src="${urls[r.photo_path]}" alt="Selfie">` : ''}</td></tr>`).join('') || '<tr><td colspan="5">No punches in this range.</td></tr>';
+}
+function exportCsv() {
+  const lines = ['Date,Time,Employee,Punch,Method', ...rows.map(r => [fmt(r.punched_at, {year:'numeric', month:'2-digit', day:'2-digit'}), fmt(r.punched_at, {hour:'2-digit', minute:'2-digit', hour12:false}), `"${r.employees.name}"`, r.kind, r.method].join(','))];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = 'attendance.csv'; a.click();
+}
+async function loadEmps() {
+  const { data } = await db.from('employees').select('id,name,qr_token,active').order('name');
+  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.active ? 'Active' : 'Inactive'}</td><td><button class="btn" data-n="${esc(e.name)}" data-t="${e.qr_token}">Show QR</button></td></tr>`).join('');
+  $('eb').onclick = e => {
+    const t = e.target.dataset.t; if (!t) return;
+    const q = qrcode(0, 'M'); q.addData(t); q.make();
+    $('dn').textContent = e.target.dataset.n; $('dq').innerHTML = q.createSvgTag({ cellSize: 6, margin: 2 }); $('dlg').showModal();
+  };
+}
+async function addEmp() {
+  const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
+  if (error) return alert(error.message);
+  $('nn').value = $('np').value = ''; loadEmps();
+}
+
+location.hash === '#admin' ? startAdmin() : startKiosk();
+addEventListener('hashchange', () => location.reload());
+</script>
+</body>
+</html>

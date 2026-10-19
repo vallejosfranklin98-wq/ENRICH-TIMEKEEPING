@@ -28,7 +28,16 @@ video{width:100%;max-width:420px;aspect-ratio:4/3;object-fit:cover;border-radius
 #msg h1{font-size:clamp(36px,7vw,72px);margin:0 0 8px}#msg p{font-size:28px;margin:0}
 @media(max-width:760px){#kiosk{grid-template-columns:1fr;padding:16px}}
 .brand{display:inline-block;background:#fff;border-radius:14px;padding:8px 16px;margin-bottom:18px}.brand img{display:block;height:56px;width:auto}
-#admin{max-width:1000px;margin:auto;padding:24px}
+[hidden]{display:none!important}
+#admin{padding:0}
+.login{max-width:520px;margin:10vh auto;padding:24px}
+.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:22px 16px;background:var(--card);border-right:1px solid var(--line)}
+.nav{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-left:4px solid transparent;border-radius:10px;background:none;color:var(--ink);font-size:16px;cursor:pointer}
+.nav:hover{background:var(--bg)}.nav.on{background:var(--bg);border-left-color:var(--in);font-weight:700}
+.side .so{margin-top:auto}
+.main{padding:28px 32px;max-width:1040px;width:100%}.main h2{margin:0 0 14px;font-size:24px}
+@media(max-width:860px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line)}.side .brand{margin:0 12px 0 0}.side .so{margin:0 0 0 auto}.nav{width:auto}.main{padding:18px}}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
 input{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
 .btn{padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
@@ -38,7 +47,13 @@ th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}th{c
 td img{width:56px;height:42px;object-fit:cover;border-radius:6px}
 .tag{font-weight:600}.tag.in{color:var(--in)}.tag.out{color:var(--out)}
 .wrap{overflow-x:auto}
-dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);text-align:center}
+dialog{width:min(92vw,440px);border:0;border-radius:20px;padding:26px;background:var(--card);color:var(--ink);box-shadow:0 24px 70px rgba(8,20,16,.4)}
+dialog[open]{animation:pop .16s ease-out}
+dialog::backdrop{background:rgba(8,20,16,.55);backdrop-filter:blur(3px)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+dialog h3{margin:0 0 6px;font-size:21px;line-height:1.25}dialog p{margin:0 0 16px;color:var(--mut)}
+dialog input{width:100%;font-size:17px;padding:12px 14px}dialog input.err{border-color:var(--bad);outline:2px solid var(--bad)}
+.mb{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad)}
 </style>
 </head>
 <body>
@@ -54,6 +69,7 @@ dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);co
 </div>
 
 <div id="admin" hidden></div>
+<dialog id="modal"><h3 id="mt"></h3><p id="mm"></p><input id="mi" autocomplete="off"><div class="mb"><button class="btn" id="mc">Cancel</button><button class="btn p" id="mo">OK</button></div></dialog>
 
 <script>
 const SUPABASE_URL = 'https://rborjrfvbdshbthlnsbw.supabase.co';
@@ -119,7 +135,7 @@ async function startAdmin() {
   data.session ? adminHome() : adminLogin();
 }
 function adminLogin(msg = '') {
-  $('admin').innerHTML = `${brand()}<h2>Admin sign in</h2><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn p" id="si">Sign in</button></div><p>${esc(msg)}</p>`;
+  $('admin').innerHTML = `<div class="login">${brand()}<h2>Admin sign in</h2><div class="row"><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button class="btn p" id="si">Sign in</button></div><p>${esc(msg)}</p></div>`;
   $('si').onclick = async () => {
     const { error } = await db.auth.signInWithPassword({ email: $('em').value, password: $('pw').value });
     error ? adminLogin(error.message) : adminHome();
@@ -127,14 +143,32 @@ function adminLogin(msg = '') {
 }
 async function adminHome() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
-  $('admin').innerHTML = `${brand()}<div class="row"><h2 style="margin:0;flex:1">Attendance</h2><button class="btn" id="so">Sign out</button></div>
-  <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
-  <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
-  <h2>Employees</h2>
-  <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
-  <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
-  <h2>History</h2>
-  <div class="wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="ab"></tbody></table></div>`;
+  $('admin').innerHTML = `<div class="shell">
+  <aside class="side">${brand()}
+    <button class="nav on" data-v="logs">Employee logs</button>
+    <button class="nav" data-v="emps">Employee management</button>
+    <button class="nav" data-v="hist">History</button>
+    <button class="btn so" id="so">Sign out</button>
+  </aside>
+  <main class="main">
+    <section id="v-logs"><h2>Employee logs</h2>
+      <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
+      <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+    </section>
+    <section id="v-emps" hidden><h2>Employee management</h2>
+      <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
+      <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
+    </section>
+    <section id="v-hist" hidden><h2>History</h2>
+      <div class="wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="ab"></tbody></table></div>
+    </section>
+  </main></div>`;
+  document.querySelector('.side').onclick = e => {
+    const v = e.target.dataset.v; if (!v) return;
+    ['logs', 'emps', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
+    scrollTo(0, 0);
+  };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
@@ -166,30 +200,47 @@ async function loadEmps() {
 }
 async function addEmp() {
   const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
-  if (error) return alert(error.message);
+  if (error) return say('Could not add employee', error.message);
   $('nn').value = $('np').value = ''; loadEmps(); loadAudit();
 }
 
+function modal({ title, message = '', input = null, ok = 'OK', danger = false, cancel = true }) {
+  return new Promise(res => {
+    const d = $('modal'), i = $('mi'), o = $('mo');
+    $('mt').textContent = title; $('mm').textContent = message;
+    i.hidden = !input; i.value = ''; i.classList.remove('err');
+    if (input) { i.placeholder = input.placeholder || ''; i.maxLength = input.max || 200; i.inputMode = input.numeric ? 'numeric' : 'text'; }
+    o.textContent = ok; o.className = 'btn ' + (danger ? 'danger' : 'p'); $('mc').hidden = !cancel;
+    const done = v => { d.close(); res(v); };
+    i.oninput = () => i.classList.remove('err');
+    i.onkeydown = e => { if (e.key === 'Enter') o.click(); };
+    o.onclick = () => { if (input && !i.value.trim()) { i.classList.add('err'); i.focus(); return; } done(input ? i.value.trim() : true); };
+    $('mc').onclick = () => done(null);
+    d.oncancel = e => { e.preventDefault(); done(null); };
+    d.showModal(); if (input) i.focus();
+  });
+}
+const say = (title, message) => modal({ title, message, cancel: false });
 async function chgPin(id, name) {
-  const pin = prompt(`New 5-digit PIN for ${name}:`);
+  const pin = await modal({ title: `New PIN for ${name}`, message: 'Enter a 5-digit PIN that no one else uses.', input: { placeholder: '5-digit PIN', max: 5, numeric: true }, ok: 'Save PIN' });
   if (!pin) return;
-  const { error } = await db.rpc('admin_change_pin', { p_id: id, p_pin: pin.trim() });
-  if (error) return alert(error.message);
+  const { error } = await db.rpc('admin_change_pin', { p_id: id, p_pin: pin });
+  if (error) return say('Could not change PIN', error.message);
   loadEmps(); loadAudit();
 }
 async function removePhotos(paths) { if (paths && paths.length) await db.storage.from('selfies').remove(paths); }
 async function delPunch(id) {
-  const reason = prompt('Permanently delete this log? It cannot be undone.\nType the reason (required):');
-  if (!reason || !reason.trim()) return;
-  const { data, error } = await db.rpc('admin_delete_punches', { p_ids: [id], p_reason: reason.trim() });
-  if (error) return alert(error.message);
+  const reason = await modal({ title: 'Delete this log permanently?', message: 'This cannot be undone. A record of the deletion, with your reason, is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete log', danger: true });
+  if (!reason) return;
+  const { data, error } = await db.rpc('admin_delete_punches', { p_ids: [id], p_reason: reason });
+  if (error) return say('Could not delete', error.message);
   await removePhotos(data); loadPunches(); loadAudit();
 }
 async function delEmp(id, name) {
-  const reason = prompt(`Permanently delete ${name} and ALL of their time logs? It cannot be undone.\nType the reason (required):`);
-  if (!reason || !reason.trim()) return;
-  const { data, error } = await db.rpc('admin_delete_employee', { p_id: id, p_reason: reason.trim() });
-  if (error) return alert(error.message);
+  const reason = await modal({ title: `Delete ${name}?`, message: 'This permanently deletes the employee and all of their time logs. It cannot be undone. A record with your reason is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete employee', danger: true });
+  if (!reason) return;
+  const { data, error } = await db.rpc('admin_delete_employee', { p_id: id, p_reason: reason });
+  if (error) return say('Could not delete', error.message);
   await removePhotos(data); loadEmps(); loadPunches(); loadAudit();
 }
 function auditText(a, d) {

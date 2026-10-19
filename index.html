@@ -125,23 +125,27 @@ async function adminHome() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
   $('admin').innerHTML = `<div class="row"><h2 style="margin:0;flex:1">Attendance</h2><button class="btn" id="so">Sign out</button></div>
   <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
-  <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
   <h2>Employees</h2>
   <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
-  <div class="wrap"><table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody id="eb"></tbody></table></div>`;
+  <div class="wrap"><table><thead><tr><th>Name</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
+  <h2>History</h2>
+  <div class="wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="ab"></tbody></table></div>`;
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
-  loadPunches(); loadEmps();
+  $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
+  $('eb').onclick = e => { const id = e.target.dataset.eid; if (id) delEmp(id, e.target.dataset.name); };
+  loadPunches(); loadEmps(); loadAudit();
 }
 async function loadPunches() {
   const a = new Date(`${$('d1').value}T00:00:00+08:00`), b = new Date(`${$('d2').value}T00:00:00+08:00`); b.setDate(b.getDate() + 1);
   const { data, error } = await db.from('punches').select('*, employees(name)').gte('punched_at', a.toISOString()).lt('punched_at', b.toISOString()).order('punched_at');
-  if (error) { $('tb').innerHTML = `<tr><td colspan="5">${esc(error.message)}</td></tr>`; return; }
+  if (error) { $('tb').innerHTML = `<tr><td colspan="6">${esc(error.message)}</td></tr>`; return; }
   rows = data;
   const paths = data.map(r => r.photo_path).filter(Boolean);
   const urls = {};
   if (paths.length) { const s = await db.storage.from('selfies').createSignedUrls(paths, 3600); (s.data || []).forEach(x => urls[x.path] = x.signedUrl); }
-  $('tb').innerHTML = data.map(r => `<tr><td>${fmt(r.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td>${esc(r.employees.name)}</td><td class="tag ${r.kind}">${r.kind === 'in' ? 'Time in' : 'Time out'}</td><td>${r.method.toUpperCase()}</td><td>${urls[r.photo_path] ? `<img src="${urls[r.photo_path]}" alt="Selfie">` : ''}</td></tr>`).join('') || '<tr><td colspan="5">No punches in this range.</td></tr>';
+  $('tb').innerHTML = data.map(r => `<tr><td>${fmt(r.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td>${esc(r.employees.name)}</td><td class="tag ${r.kind}">${r.kind === 'in' ? 'Time in' : 'Time out'}</td><td>${r.method.toUpperCase()}</td><td>${urls[r.photo_path] ? `<img src="${urls[r.photo_path]}" alt="Selfie">` : ''}</td><td><button class="btn" data-del="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No punches in this range.</td></tr>';
 }
 function exportCsv() {
   const lines = ['Date,Time,Employee,Punch,Method', ...rows.map(r => [fmt(r.punched_at, {year:'numeric', month:'2-digit', day:'2-digit'}), fmt(r.punched_at, {hour:'2-digit', minute:'2-digit', hour12:false}), `"${r.employees.name}"`, r.kind, r.method].join(','))];
@@ -149,12 +153,40 @@ function exportCsv() {
 }
 async function loadEmps() {
   const { data } = await db.from('employees').select('id,name,active').order('name');
-  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.active ? 'Active' : 'Inactive'}</td></tr>`).join('');
+  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.active ? 'Active' : 'Inactive'}</td><td><button class="btn" data-eid="${e.id}" data-name="${esc(e.name)}">Delete</button></td></tr>`).join('');
 }
 async function addEmp() {
   const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
   if (error) return alert(error.message);
-  $('nn').value = $('np').value = ''; loadEmps();
+  $('nn').value = $('np').value = ''; loadEmps(); loadAudit();
+}
+
+async function removePhotos(paths) { if (paths && paths.length) await db.storage.from('selfies').remove(paths); }
+async function delPunch(id) {
+  const reason = prompt('Permanently delete this log? It cannot be undone.\nType the reason (required):');
+  if (!reason || !reason.trim()) return;
+  const { data, error } = await db.rpc('admin_delete_punches', { p_ids: [id], p_reason: reason.trim() });
+  if (error) return alert(error.message);
+  await removePhotos(data); loadPunches(); loadAudit();
+}
+async function delEmp(id, name) {
+  const reason = prompt(`Permanently delete ${name} and ALL of their time logs? It cannot be undone.\nType the reason (required):`);
+  if (!reason || !reason.trim()) return;
+  const { data, error } = await db.rpc('admin_delete_employee', { p_id: id, p_reason: reason.trim() });
+  if (error) return alert(error.message);
+  await removePhotos(data); loadEmps(); loadPunches(); loadAudit();
+}
+function auditText(a, d) {
+  const w = d.reason ? ` | Reason: ${d.reason}` : '';
+  if (a === 'delete_punch') return `${d.employee}: ${d.kind === 'in' ? 'Time in' : 'Time out'} on ${fmt(d.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}${w}`;
+  if (a === 'delete_employee') return `${d.employee} and ${d.logs_deleted} log(s)${w}`;
+  return d.employee || '';
+}
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee' };
+async function loadAudit() {
+  const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
+  if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
+  $('ab').innerHTML = data.map(a => `<tr><td>${fmt(a.at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}</td><td>${esc(a.admin_email || '')}</td><td>${actions[a.action] || esc(a.action)}</td><td>${esc(auditText(a.action, a.details))}</td></tr>`).join('') || '<tr><td colspan="4">No history yet.</td></tr>';
 }
 
 location.hash === '#admin' ? startAdmin() : startKiosk();

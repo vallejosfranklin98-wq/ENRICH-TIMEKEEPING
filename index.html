@@ -128,13 +128,18 @@ async function adminHome() {
   <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
   <h2>Employees</h2>
   <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
-  <div class="wrap"><table><thead><tr><th>Name</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
+  <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
   <h2>History</h2>
   <div class="wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="ab"></tbody></table></div>`;
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
-  $('eb').onclick = e => { const id = e.target.dataset.eid; if (id) delEmp(id, e.target.dataset.name); };
+  $('eb').onclick = e => {
+    const t = e.target, d = t.dataset;
+    if (d.pin) { t.textContent = t.textContent === 'Show' ? d.pin : 'Show'; return; }
+    if (d.chg) return chgPin(d.chg, d.name);
+    if (d.eid) delEmp(d.eid, d.name);
+  };
   loadPunches(); loadEmps(); loadAudit();
 }
 async function loadPunches() {
@@ -152,8 +157,8 @@ function exportCsv() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = 'attendance.csv'; a.click();
 }
 async function loadEmps() {
-  const { data } = await db.from('employees').select('id,name,active').order('name');
-  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.active ? 'Active' : 'Inactive'}</td><td><button class="btn" data-eid="${e.id}" data-name="${esc(e.name)}">Delete</button></td></tr>`).join('');
+  const { data } = await db.from('employees').select('id,name,active,pin_plain').order('name');
+  $('eb').innerHTML = (data || []).map(e => `<tr><td>${esc(e.name)}</td><td>${e.pin_plain ? `<button class="btn" data-pin="${e.pin_plain}">Show</button>` : 'Not set'}</td><td>${e.active ? 'Active' : 'Inactive'}</td><td><button class="btn" data-chg="${e.id}" data-name="${esc(e.name)}">Change PIN</button> <button class="btn" data-eid="${e.id}" data-name="${esc(e.name)}">Delete</button></td></tr>`).join('');
 }
 async function addEmp() {
   const { error } = await db.rpc('admin_add_employee', { p_name: $('nn').value.trim(), p_pin: $('np').value });
@@ -161,6 +166,13 @@ async function addEmp() {
   $('nn').value = $('np').value = ''; loadEmps(); loadAudit();
 }
 
+async function chgPin(id, name) {
+  const pin = prompt(`New 5-digit PIN for ${name}:`);
+  if (!pin) return;
+  const { error } = await db.rpc('admin_change_pin', { p_id: id, p_pin: pin.trim() });
+  if (error) return alert(error.message);
+  loadEmps(); loadAudit();
+}
 async function removePhotos(paths) { if (paths && paths.length) await db.storage.from('selfies').remove(paths); }
 async function delPunch(id) {
   const reason = prompt('Permanently delete this log? It cannot be undone.\nType the reason (required):');
@@ -182,7 +194,7 @@ function auditText(a, d) {
   if (a === 'delete_employee') return `${d.employee} and ${d.logs_deleted} log(s)${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }

@@ -163,6 +163,13 @@ dialog::backdrop{background:rgba(8,20,16,.55);backdrop-filter:blur(4px)}
 dialog h3{margin:0 0 6px;font-size:21px;line-height:1.25;letter-spacing:-.01em}dialog p{margin:0 0 16px;color:var(--mut)}
 dialog input{width:100%;font-size:17px;padding:13px 15px}dialog input.err{border-color:var(--bad);box-shadow:0 0 0 4px rgba(194,59,39,.18)}
 .mb{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}.btn.danger{background:var(--bad);color:#fff;border-color:var(--bad);box-shadow:none}
+select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);font:inherit;color:inherit;outline:0}
+select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fgrid label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--mut)}.fgrid .wide{grid-column:1/-1}
+#lvm{width:min(94vw,560px)}#lvm p{margin:14px 0 0;font-size:14px}
+.lc{display:grid;grid-template-columns:minmax(160px,1.4fr) 110px 1.6fr auto;gap:10px;margin:14px 0}
+.num{font-variant-numeric:tabular-nums;font-weight:700}
+@media(max-width:700px){.lc,.fgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -192,6 +199,21 @@ dialog input{width:100%;font-size:17px;padding:13px 15px}dialog input.err{border
 <div id="admin" hidden></div>
 <dialog id="modal"><h3 id="mt"></h3><p id="mm"></p><input id="mi" autocomplete="off"><div class="mb"><button class="btn" id="mc">Cancel</button><button class="btn p" id="mo">OK</button></div></dialog>
 
+<dialog id="lvm"><h3 id="lvt">Add leave</h3>
+  <div class="fgrid">
+    <label>Employee<select id="lv-e"></select></label>
+    <label>Leave type<select id="lv-t"><option>Vacation</option><option>Sick</option><option>Emergency</option><option>Maternity / Paternity</option><option>Other</option></select></label>
+    <label>From<input type="date" id="lv-f"></label>
+    <label>To<input type="date" id="lv-to"></label>
+    <label>Days<input id="lv-d" inputmode="decimal"></label>
+    <label>Status<select id="lv-s"><option>Pending</option><option>Approved</option><option>Disapproved</option></select></label>
+    <label>Pay<select id="lv-p"><option>With Pay</option><option>Without Pay</option></select></label>
+    <label class="wide">Remarks<input id="lv-r"></label>
+  </div>
+  <p id="lv-note"></p>
+  <div class="mb"><button class="btn" id="lv-c">Cancel</button><button class="btn p" id="lv-ok">Save</button></div>
+</dialog>
+
 <script>
 const SUPABASE_URL = 'https://rborjrfvbdshbthlnsbw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJib3JqcmZ2YmRzaGJ0aGxuc2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTM1MjIsImV4cCI6MjEwNzk2OTUyMn0.w7rYYLo1GGs0KB6d3TAmKzEn-_9FBfBDyf_67sTl5o4';
@@ -213,6 +235,7 @@ const IC = {
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
   clock:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   warn:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  leave:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
   cam:'<svg class="i" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
 };
 
@@ -308,6 +331,7 @@ async function adminHome() {
     <button class="nav on" data-v="dash">${IC.dash}Dashboard</button>
     <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
     <button class="nav" data-v="emps">${IC.emps}Employee management</button>
+    <button class="nav" data-v="leave">${IC.leave}Leave management</button>
     <button class="nav" data-v="hist">${IC.hist}History</button>
     <button class="btn so" id="so">${IC.out}Sign out</button>
   </aside>
@@ -327,6 +351,14 @@ async function adminHome() {
       <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
       <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
     </section>
+    <section id="v-leave" hidden><h2>Leave management</h2><p class="sub">Balance = credits added minus approved leave with pay. It recalculates after every change.</p>
+      <h3 class="sec">Leave balances</h3>
+      <div class="lc"><select id="lc-e"></select><input id="lc-d" inputmode="decimal" placeholder="Days (+/-)"><input id="lc-r" placeholder="Remarks (e.g. 2026 annual leave)"><button class="btn p" id="lc-add">Add credits</button></div>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Credits added</th><th>Used (paid)</th><th>Balance</th></tr></thead><tbody id="lbb"></tbody></table></div>
+      <h3 class="sec">Leave transactions</h3>
+      <div class="row"><button class="btn p" id="lv-new">Add leave</button></div>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Pay</th><th>Remarks</th><th></th></tr></thead><tbody id="ltb"></tbody></table></div>
+    </section>
     <section id="v-hist" hidden><h2>History</h2>
       <div class="row"><button class="btn" id="dlh">Download history (CSV)</button><button class="btn warn" id="clh">Clear history</button></div>
       <div class="wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody id="ab"></tbody></table></div>
@@ -334,13 +366,14 @@ async function adminHome() {
   </main></div>`;
   document.querySelector('.side').onclick = e => {
     const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
-    ['dash', 'logs', 'emps', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    ['dash', 'logs', 'emps', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0); if (v === 'dash') loadDash();
+    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave();
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
   $('dlh').onclick = () => exportAudit(); $('clh').onclick = clearAudit;
+  $('lc-add').onclick = addCredit; $('lv-new').onclick = () => openLeave(); $('ltb').onclick = leaveClick;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
   $('eb').onclick = e => {
     const t = e.target, d = t.dataset;
@@ -348,7 +381,7 @@ async function adminHome() {
     if (d.chg) return chgPin(d.chg, d.name);
     if (d.eid) delEmp(d.eid, d.name);
   };
-  loadPunches(); loadEmps(); loadAudit(); loadDash();
+  loadPunches(); loadEmps(); loadAudit(); loadDash(); loadLeave();
   clearInterval(window.dashTimer);
   window.dashTimer = setInterval(() => { if (!$('v-dash').hidden) loadDash(); }, 60000);
 }
@@ -456,9 +489,11 @@ function auditText(a, d) {
   if (a === 'delete_punch') return `${d.employee}: ${d.kind === 'in' ? 'Time in' : 'Time out'} on ${fmt(d.punched_at, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})}${w}`;
   if (a === 'delete_employee') return `${d.employee} and ${d.logs_deleted} log(s)${w}`;
   if (a === 'clear_history') return `${d.entries_removed} entries removed${w}`;
+  if (a === 'add_leave_credit') return `${d.employee}: ${d.days > 0 ? '+' : ''}${d.days} day(s)${d.remarks ? ' | ' + d.remarks : ''}`;
+  if (/_leave$/.test(a)) return `${d.employee}: ${d.leave_type}, ${d.from} to ${d.to}, ${d.days} day(s), ${d.status} - ${d.pay}${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
@@ -490,6 +525,64 @@ async function clearAudit() {
   const { error } = await db.rpc('admin_clear_audit', { p_reason: reason });
   if (error) return say('Could not clear history', error.message);
   loadAudit();
+}
+
+/* ---------- Leave management ---------- */
+let lvEmps = [], lvRows = [], lvId = null;
+const n2 = x => Number(x).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const lvDeducts = (s, p) => s === 'Approved' && p === 'With Pay';
+async function loadLeave() {
+  const [B, T] = await Promise.all([
+    db.from('leave_balances').select('*').order('name'),
+    db.from('leave_transactions').select('*, employees(name)').order('date_from', { ascending: false }).limit(500)
+  ]);
+  const err = B.error || T.error;
+  if (err) { $('lbb').innerHTML = `<tr><td colspan="4">${esc(err.message)}</td></tr>`; return; }
+  lvEmps = B.data; lvRows = T.data;
+  const cur = $('lc-e').value;
+  $('lc-e').innerHTML = lvEmps.map(e => `<option value="${e.employee_id}">${esc(e.name)}</option>`).join(''); if (cur) $('lc-e').value = cur;
+  $('lbb').innerHTML = lvEmps.map(e => `<tr><td><div class="who2"><span class="av">${ini(e.name)}</span>${esc(e.name)}</div></td><td class="num">${n2(e.credits)}</td><td class="num">${n2(e.used)}</td><td><span class="pill num ${e.balance > 0 ? 'in' : 'ab'}">${n2(e.balance)}</span></td></tr>`).join('') || '<tr><td colspan="4">No active employees yet.</td></tr>';
+  const d = x => fmt(`${x}T12:00:00+08:00`, { month: 'short', day: 'numeric', year: 'numeric' });
+  const sc = { Approved: 'in', Pending: 'out', Disapproved: 'bad' };
+  $('ltb').innerHTML = lvRows.map(r => `<tr><td><div class="who2"><span class="av">${ini(r.employees.name)}</span>${esc(r.employees.name)}</div></td><td>${esc(r.leave_type)}</td><td>${d(r.date_from)}${r.date_to !== r.date_from ? ' to ' + d(r.date_to) : ''}</td><td class="num">${n2(r.days)}${lvDeducts(r.status, r.pay_type) ? ' (deducted)' : ''}</td><td><span class="pill ${sc[r.status]}">${r.status}</span></td><td>${r.pay_type}</td><td style="white-space:normal;min-width:140px">${esc(r.remarks || '')}</td><td style="text-align:right"><button class="btn sm" data-edit="${r.id}">Edit</button> <button class="btn sm" data-ldel="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="8">No leave transactions yet.</td></tr>';
+}
+async function addCredit() {
+  const { error } = await db.rpc('admin_add_leave_credit', { p_employee: $('lc-e').value, p_days: parseFloat($('lc-d').value), p_remarks: $('lc-r').value });
+  if (error) return say('Could not add credits', error.message);
+  $('lc-d').value = $('lc-r').value = ''; loadLeave(); loadAudit();
+}
+function lvNote() {
+  const d = parseFloat($('lv-d').value) || 0, n = $('lv-note'); n.style.color = '';
+  n.textContent = lvDeducts($('lv-s').value, $('lv-p').value) ? `Approved with pay: ${n2(d)} day(s) will be deducted from the leave balance.` : 'No leave credits will be deducted.';
+}
+function openLeave(r) {
+  lvId = r ? r.id : null; $('lvt').textContent = r ? 'Edit leave' : 'Add leave';
+  $('lv-e').innerHTML = lvEmps.map(e => `<option value="${e.employee_id}">${esc(e.name)}</option>`).join('');
+  const t = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  $('lv-e').value = r ? r.employee_id : (lvEmps[0] || {}).employee_id || '';
+  $('lv-t').value = r ? r.leave_type : 'Vacation';
+  $('lv-f').value = r ? r.date_from : t; $('lv-to').value = r ? r.date_to : t;
+  $('lv-d').value = r ? r.days : 1; $('lv-s').value = r ? r.status : 'Pending'; $('lv-p').value = r ? r.pay_type : 'With Pay';
+  $('lv-r').value = r ? (r.remarks || '') : ''; lvNote(); $('lvm').showModal();
+}
+['lv-f', 'lv-to'].forEach(id => $(id).onchange = () => { const a = Date.parse($('lv-f').value), b = Date.parse($('lv-to').value); if (b >= a) { $('lv-d').value = (b - a) / 864e5 + 1; lvNote(); } });
+['lv-d', 'lv-s', 'lv-p'].forEach(id => $(id).oninput = lvNote);
+$('lv-c').onclick = () => $('lvm').close();
+$('lv-ok').onclick = async () => {
+  const { error } = await db.rpc('admin_save_leave', { p_id: lvId, p_employee: $('lv-e').value, p_type: $('lv-t').value, p_from: $('lv-f').value, p_to: $('lv-to').value, p_days: parseFloat($('lv-d').value), p_status: $('lv-s').value, p_pay: $('lv-p').value, p_remarks: $('lv-r').value.trim() || null });
+  if (error) { $('lv-note').textContent = error.message; $('lv-note').style.color = 'var(--bad)'; return; }
+  $('lvm').close(); loadLeave(); loadAudit();
+};
+async function leaveClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.edit) return openLeave(lvRows.find(r => r.id === b.dataset.edit));
+  if (b.dataset.ldel) {
+    const reason = await modal({ title: 'Delete this leave record?', message: 'If it was deducted, the days go back to the balance. A record is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete leave', danger: true });
+    if (!reason) return;
+    const { error } = await db.rpc('admin_delete_leave', { p_id: b.dataset.ldel, p_reason: reason });
+    if (error) return say('Could not delete', error.message);
+    loadLeave(); loadAudit();
+  }
 }
 
 location.hash === '#admin' ? startAdmin() : startKiosk();

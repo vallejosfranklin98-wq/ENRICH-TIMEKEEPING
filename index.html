@@ -173,6 +173,7 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
 #pfm{width:min(94vw,720px);max-height:90vh;overflow:auto}#pfm h3.sub-h{margin:22px 0 4px;font-size:16px}
 .lc2{display:grid;grid-template-columns:1fr 1.6fr auto;gap:10px;margin:10px 0}
 @media(max-width:700px){.lc2{grid-template-columns:1fr}}
+#scm{width:min(94vw,520px)}#scm p{margin:14px 0 0;color:var(--bad);font-size:14px}
 </style>
 </head>
 <body>
@@ -242,6 +243,18 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
   <div class="mb"><button class="btn" id="pf-close">Close</button><button class="btn p" id="pf-save">Save profile</button></div>
 </dialog>
 
+<dialog id="scm"><h3 id="sct">Add schedule</h3>
+  <div class="fgrid">
+    <label class="wide">Schedule name<input id="sc-n"></label>
+    <label>Time in<input type="time" id="sc-i"></label>
+    <label>Time out<input type="time" id="sc-o"></label>
+    <label>Break (minutes)<input id="sc-b" inputmode="numeric"></label>
+    <label>Grace period (minutes)<input id="sc-g" inputmode="numeric"></label>
+  </div>
+  <p id="sc-note"></p>
+  <div class="mb"><button class="btn" id="sc-close">Cancel</button><button class="btn p" id="sc-save">Save</button></div>
+</dialog>
+
 <script>
 const SUPABASE_URL = 'https://rborjrfvbdshbthlnsbw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJib3JqcmZ2YmRzaGJ0aGxuc2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTM1MjIsImV4cCI6MjEwNzk2OTUyMn0.w7rYYLo1GGs0KB6d3TAmKzEn-_9FBfBDyf_67sTl5o4';
@@ -263,6 +276,7 @@ const IC = {
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
   clock:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   warn:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  sheet:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   id:'<svg class="i" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M13 10h5M13 14h4"/></svg>',
   leave:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
   cam:'<svg class="i" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
@@ -359,6 +373,8 @@ async function adminHome() {
   <aside class="side">${brand()}
     <button class="nav on" data-v="dash">${IC.dash}Dashboard</button>
     <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
+    <button class="nav" data-v="sched">${IC.clock}Schedules</button>
+    <button class="nav" data-v="ts">${IC.sheet}Timesheet</button>
     <button class="nav" data-v="emps">${IC.emps}Employee management</button>
     <button class="nav" data-v="prof">${IC.id}Employee profiles</button>
     <button class="nav" data-v="leave">${IC.leave}Leave management</button>
@@ -376,6 +392,19 @@ async function adminHome() {
     <section id="v-logs" hidden><h2>Employee logs</h2>
       <div class="row"><input type="date" id="d1" value="${today}"><input type="date" id="d2" value="${today}"><button class="btn p" id="ld">Load</button><button class="btn" id="csv">Export CSV</button></div>
       <div class="wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Punch</th><th>Method</th><th>Photo</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>
+    </section>
+    <section id="v-sched" hidden><h2>Schedules</h2><p class="sub">Set the work hours, then assign each employee. Late and undertime are computed from these.</p>
+      <div class="row"><button class="btn p" id="sc-new">Add schedule</button></div>
+      <div class="wrap"><table><thead><tr><th>Name</th><th>Time in</th><th>Time out</th><th>Break</th><th>Grace</th><th></th></tr></thead><tbody id="scb"></tbody></table></div>
+      <h3 class="sec">Employee assignments</h3>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Schedule</th></tr></thead><tbody id="sab"></tbody></table></div>
+    </section>
+    <section id="v-ts" hidden><h2>Timesheet</h2><p class="sub">Computed from punches and each employee's schedule. Late counts from the scheduled time once the grace period is passed. Hours worked = time in to time out, minus the break. Overtime is time worked past the schedule end and still needs approval.</p>
+      <div class="row"><input type="date" id="t1" value="${today.slice(0, 8)}01"><input type="date" id="t2" value="${today}"><select id="t-e" style="width:auto"><option value="">All employees</option></select><button class="btn p" id="t-load">Load</button><button class="btn" id="t-csv">Export CSV</button></div>
+      <h3 class="sec">Summary per employee</h3>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Days</th><th>Late (min)</th><th>Undertime (min)</th><th>Overtime (min)</th><th>Hours worked</th><th>Incomplete days</th></tr></thead><tbody id="tss"></tbody></table></div>
+      <h3 class="sec">Daily detail</h3>
+      <div class="wrap"><table><thead><tr><th>Date</th><th>Employee</th><th>Schedule</th><th>Time in</th><th>Time out</th><th>Late</th><th>Under</th><th>OT</th><th>Hours</th><th>Status</th></tr></thead><tbody id="tsd"></tbody></table></div>
     </section>
     <section id="v-emps" hidden><h2>Employee management</h2>
       <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
@@ -399,15 +428,16 @@ async function adminHome() {
   </main></div>`;
   document.querySelector('.side').onclick = e => {
     const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
-    ['dash', 'logs', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    ['dash', 'logs', 'sched', 'ts', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles();
+    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles(); if (v === 'sched') loadSched(); if (v === 'ts') loadTs();
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
   $('dlh').onclick = () => exportAudit(); $('clh').onclick = clearAudit;
   $('lc-add').onclick = addCredit; $('lv-new').onclick = () => openLeave(); $('ltb').onclick = leaveClick;
   $('pfb').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.open) openProfile(b.dataset.open); };
+  $('sc-new').onclick = () => openSched(); $('scb').onclick = schedClick; $('sab').onchange = assignChange; $('t-load').onclick = loadTs; $('t-csv').onclick = exportTs;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
   $('eb').onclick = e => {
     const t = e.target, d = t.dataset;
@@ -528,11 +558,13 @@ function auditText(a, d) {
   if (a === 'delete_employee') return `${d.employee} and ${d.logs_deleted} log(s)${w}`;
   if (a === 'clear_history') return `${d.entries_removed} entries removed${w}`;
   if (a === 'add_leave_credit') return `${d.employee}: ${d.days > 0 ? '+' : ''}${d.days} day(s)${d.remarks ? ' | ' + d.remarks : ''}`;
+  if (a === 'save_schedule' || a === 'delete_schedule') return `${d.schedule}${w}`;
+  if (a === 'set_schedule') return `${d.employee}: ${d.schedule || 'No schedule'}`;
   if (/_document$/.test(a)) return `${d.employee}: ${d.doc_type} (${d.file})${w}`;
   if (/_leave$/.test(a)) return `${d.employee}: ${d.leave_type}, ${d.from} to ${d.to}, ${d.days} day(s), ${d.status} - ${d.pay}${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document', save_schedule: 'Saved schedule', delete_schedule: 'Deleted schedule', set_schedule: 'Assigned schedule' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
@@ -684,6 +716,91 @@ async function docClick(e) {
   }
 }
 $('pf-save').onclick = saveProfile; $('pf-up').onclick = uploadDoc; $('pf-close').onclick = () => $('pfm').close(); $('pfd').onclick = docClick;
+
+/* ---------- Schedules and timesheet ---------- */
+let scRows = [], scId = null, tsRows = [];
+const tm = t => { const [h, m] = t.split(':'); return +h * 60 + +m; };
+const t12 = t => { const [h, m] = t.split(':'); return `${+h % 12 || 12}:${m} ${+h < 12 ? 'AM' : 'PM'}`; };
+const hm = m => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+const mod = t => Math.floor(((new Date(t).getTime() + 288e5) % 864e5) / 6e4);
+async function loadSched() {
+  const [S, E] = await Promise.all([db.from('schedules').select('*').order('name'), db.from('employees').select('id,name,schedule_id').eq('active', true).order('name')]);
+  const err = S.error || E.error; if (err) { $('scb').innerHTML = `<tr><td colspan="6">${esc(err.message)}</td></tr>`; return; }
+  scRows = S.data;
+  $('scb').innerHTML = scRows.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${t12(x.time_in)}</td><td>${t12(x.time_out)}</td><td>${x.break_minutes} min</td><td>${x.grace_minutes} min</td><td style="text-align:right"><button class="btn sm" data-sedit="${x.id}">Edit</button> <button class="btn sm" data-sdel="${x.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="6">No schedules yet.</td></tr>';
+  const opts = '<option value="">No schedule</option>' + scRows.map(x => `<option value="${x.id}">${esc(x.name)} (${t12(x.time_in)} - ${t12(x.time_out)})</option>`).join('');
+  $('sab').innerHTML = E.data.map(e => `<tr><td><div class="who2"><span class="av">${ini(e.name)}</span>${esc(e.name)}</div></td><td><select data-emp="${e.id}" style="max-width:340px">${opts.replace(`value="${e.schedule_id}"`, `value="${e.schedule_id}" selected`)}</select></td></tr>`).join('') || '<tr><td colspan="2">No active employees yet.</td></tr>';
+}
+function openSched(x) {
+  scId = x ? x.id : null; $('sct').textContent = x ? 'Edit schedule' : 'Add schedule';
+  $('sc-n').value = x ? x.name : ''; $('sc-i').value = x ? x.time_in.slice(0, 5) : '08:00'; $('sc-o').value = x ? x.time_out.slice(0, 5) : '17:00';
+  $('sc-b').value = x ? x.break_minutes : 60; $('sc-g').value = x ? x.grace_minutes : 0; $('sc-note').textContent = ''; $('scm').showModal();
+}
+async function saveSched() {
+  const { error } = await db.rpc('admin_save_schedule', { p_id: scId, p_name: $('sc-n').value.trim(), p_in: $('sc-i').value, p_out: $('sc-o').value, p_break: parseInt($('sc-b').value) || 0, p_grace: parseInt($('sc-g').value) || 0 });
+  if (error) { $('sc-note').textContent = error.message; return; }
+  $('scm').close(); loadSched(); loadAudit();
+}
+async function schedClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.sedit) return openSched(scRows.find(x => x.id === b.dataset.sedit));
+  if (b.dataset.sdel) {
+    const reason = await modal({ title: 'Delete this schedule?', message: 'Employees using it will have no schedule until you assign another. A record is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete schedule', danger: true });
+    if (!reason) return;
+    const { error } = await db.rpc('admin_delete_schedule', { p_id: b.dataset.sdel, p_reason: reason });
+    if (error) return say('Could not delete', error.message);
+    loadSched(); loadAudit();
+  }
+}
+async function assignChange(e) {
+  const id = e.target.dataset.emp; if (!id) return;
+  const { error } = await db.rpc('admin_set_schedule', { p_employee: id, p_schedule: e.target.value || null });
+  if (error) { await say('Could not assign', error.message); loadSched(); return; }
+  loadAudit();
+}
+async function loadTs() {
+  const only = $('t-e').value, from = new Date(`${$('t1').value}T00:00:00+08:00`), to = new Date(`${$('t2').value}T00:00:00+08:00`); to.setDate(to.getDate() + 1);
+  const [S, E] = await Promise.all([db.from('schedules').select('*'), db.from('employees').select('id,name,schedule_id').eq('active', true).order('name')]);
+  if (S.error || E.error) { $('tsd').innerHTML = `<tr><td colspan="10">${esc((S.error || E.error).message)}</td></tr>`; return; }
+  $('t-e').innerHTML = '<option value="">All employees</option>' + E.data.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join(''); $('t-e').value = only;
+  let P = [], off = 0;
+  for (;;) {
+    let q = db.from('punches').select('employee_id,kind,punched_at').gte('punched_at', from.toISOString()).lt('punched_at', to.toISOString()).order('punched_at').range(off, off + 999);
+    if (only) q = q.eq('employee_id', only);
+    const r = await q; if (r.error) { $('tsd').innerHTML = `<tr><td colspan="10">${esc(r.error.message)}</td></tr>`; return; }
+    P = P.concat(r.data); if (r.data.length < 1000) break; off += 1000;
+  }
+  const sch = {}; S.data.forEach(x => sch[x.id] = x); tsRows = [];
+  E.data.filter(e => !only || e.id === only).forEach(e => {
+    const sc = sch[e.schedule_id], days = {};
+    P.filter(p => p.employee_id === e.id).forEach(p => { const k = dayKey(p.punched_at); (days[k] = days[k] || []).push(p); });
+    Object.keys(days).sort().forEach(day => {
+      const ins = days[day].filter(p => p.kind === 'in'), outs = days[day].filter(p => p.kind === 'out');
+      const tin = ins.length ? ins[0].punched_at : null, lo = outs.length ? outs[outs.length - 1].punched_at : null;
+      const tout = tin && lo && new Date(lo) > new Date(tin) ? lo : null;
+      const r = { name: e.name, day, sched: sc ? sc.name : '-', tin, tout, late: null, under: null, ot: null, work: null, status: !tin ? 'No time in' : !tout ? 'No time out' : 'OK' };
+      if (tin && sc) { const m = mod(tin), si = tm(sc.time_in); r.late = m > si + sc.grace_minutes ? m - si : 0; }
+      if (tin && tout) {
+        r.work = Math.max(0, Math.round((new Date(tout) - new Date(tin)) / 6e4) - (sc ? sc.break_minutes : 0));
+        if (sc) { const mo = mod(tout), so = tm(sc.time_out); r.under = mo < so ? so - mo : 0; r.ot = mo > so ? mo - so : 0; }
+      }
+      if (!sc && r.status === 'OK') r.status = 'No schedule';
+      tsRows.push(r);
+    });
+  });
+  const sum = {};
+  tsRows.forEach(r => { const x = sum[r.name] = sum[r.name] || { days: 0, late: 0, under: 0, ot: 0, work: 0, bad: 0 }; x.days++; x.late += r.late || 0; x.under += r.under || 0; x.ot += r.ot || 0; x.work += r.work || 0; if (r.status.startsWith('No time')) x.bad++; });
+  const who = n => `<div class="who2"><span class="av">${ini(n)}</span>${esc(n)}</div>`;
+  $('tss').innerHTML = Object.keys(sum).map(n => { const x = sum[n]; return `<tr><td>${who(n)}</td><td class="num">${x.days}</td><td class="num">${x.late}</td><td class="num">${x.under}</td><td class="num">${x.ot}</td><td class="num">${hm(x.work)}</td><td>${x.bad ? `<span class="pill bad">${x.bad}</span>` : '-'}</td></tr>`; }).join('') || '<tr><td colspan="7">No punches in this range.</td></tr>';
+  const t = x => x ? fmt(x, { hour: 'numeric', minute: '2-digit' }) : '-', v = x => x == null ? '-' : x;
+  $('tsd').innerHTML = tsRows.map(r => `<tr><td>${fmt(`${r.day}T12:00:00+08:00`, { month: 'short', day: 'numeric' })}</td><td>${who(r.name)}</td><td>${esc(r.sched)}</td><td>${t(r.tin)}</td><td>${t(r.tout)}</td><td class="num">${v(r.late)}</td><td class="num">${v(r.under)}</td><td class="num">${v(r.ot)}</td><td class="num">${r.work == null ? '-' : hm(r.work)}</td><td><span class="pill ${r.status === 'OK' ? 'in' : 'bad'}">${r.status}</span></td></tr>`).join('') || '<tr><td colspan="10">No punches in this range.</td></tr>';
+}
+function exportTs() {
+  const q = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"', t = x => x ? fmt(x, { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+  const lines = ['Date,Employee,Schedule,Time in,Time out,Late (min),Undertime (min),Overtime (min),Hours worked,Status', ...tsRows.map(r => [r.day, q(r.name), q(r.sched), t(r.tin), t(r.tout), r.late ?? '', r.under ?? '', r.ot ?? '', r.work == null ? '' : (r.work / 60).toFixed(2), r.status].join(','))];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv' })); a.download = `timesheet-${$('t1').value}-to-${$('t2').value}.csv`; a.click();
+}
+$('sc-save').onclick = saveSched; $('sc-close').onclick = () => $('scm').close();
 
 location.hash === '#admin' ? startAdmin() : startKiosk();
 addEventListener('hashchange', () => location.reload());

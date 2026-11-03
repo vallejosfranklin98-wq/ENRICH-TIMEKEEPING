@@ -170,6 +170,9 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
 .lc{display:grid;grid-template-columns:minmax(160px,1.4fr) 110px 1.6fr auto;gap:10px;margin:14px 0}
 .num{font-variant-numeric:tabular-nums;font-weight:700}
 @media(max-width:700px){.lc,.fgrid{grid-template-columns:1fr}}
+#pfm{width:min(94vw,720px);max-height:90vh;overflow:auto}#pfm h3.sub-h{margin:22px 0 4px;font-size:16px}
+.lc2{display:grid;grid-template-columns:1fr 1.6fr auto;gap:10px;margin:10px 0}
+@media(max-width:700px){.lc2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -214,6 +217,31 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
   <div class="mb"><button class="btn" id="lv-c">Cancel</button><button class="btn p" id="lv-ok">Save</button></div>
 </dialog>
 
+<dialog id="pfm"><h3 id="pft">Employee profile</h3>
+  <div class="fgrid">
+    <label>Employee no.<input id="pf-no"></label>
+    <label>Job title<input id="pf-jt"></label>
+    <label>Department<input id="pf-dp"></label>
+    <label>Employment type<select id="pf-et"><option value="">-</option><option>Regular</option><option>Probationary</option><option>Contractual</option><option>Project-based</option></select></label>
+    <label>Date hired<input type="date" id="pf-dh"></label>
+    <label>Birthdate<input type="date" id="pf-bd"></label>
+    <label>Contact no.<input id="pf-cn"></label>
+    <label>Email<input id="pf-em" type="email"></label>
+    <label class="wide">Address<input id="pf-ad"></label>
+    <label>Emergency contact<input id="pf-en"></label>
+    <label>Emergency contact no.<input id="pf-ec"></label>
+    <label>SSS no.<input id="pf-ss"></label>
+    <label>PhilHealth no.<input id="pf-ph"></label>
+    <label>Pag-IBIG no.<input id="pf-pi"></label>
+    <label>TIN<input id="pf-tn"></label>
+  </div>
+  <h3 class="sub-h">Documents (201 file)</h3>
+  <div class="lc2"><select id="pf-dt"><option>Resume</option><option>Employment contract</option><option>Government ID</option><option>NBI clearance</option><option>Medical</option><option>Certificate</option><option>Other</option></select><input type="file" id="pf-file"><button class="btn p" id="pf-up">Upload</button></div>
+  <div class="wrap"><table><tbody id="pfd"></tbody></table></div>
+  <p id="pf-note"></p>
+  <div class="mb"><button class="btn" id="pf-close">Close</button><button class="btn p" id="pf-save">Save profile</button></div>
+</dialog>
+
 <script>
 const SUPABASE_URL = 'https://rborjrfvbdshbthlnsbw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJib3JqcmZ2YmRzaGJ0aGxuc2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTM1MjIsImV4cCI6MjEwNzk2OTUyMn0.w7rYYLo1GGs0KB6d3TAmKzEn-_9FBfBDyf_67sTl5o4';
@@ -235,6 +263,7 @@ const IC = {
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
   clock:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   warn:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  id:'<svg class="i" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M13 10h5M13 14h4"/></svg>',
   leave:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
   cam:'<svg class="i" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
 };
@@ -331,6 +360,7 @@ async function adminHome() {
     <button class="nav on" data-v="dash">${IC.dash}Dashboard</button>
     <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
     <button class="nav" data-v="emps">${IC.emps}Employee management</button>
+    <button class="nav" data-v="prof">${IC.id}Employee profiles</button>
     <button class="nav" data-v="leave">${IC.leave}Leave management</button>
     <button class="nav" data-v="hist">${IC.hist}History</button>
     <button class="btn so" id="so">${IC.out}Sign out</button>
@@ -351,6 +381,9 @@ async function adminHome() {
       <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
       <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
     </section>
+    <section id="v-prof" hidden><h2>Employee profiles</h2><p class="sub">201 files: personal details and documents. Click Open to view or edit.</p>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Job title</th><th>Department</th><th>Type</th><th>Date hired</th><th>Documents</th><th></th></tr></thead><tbody id="pfb"></tbody></table></div>
+    </section>
     <section id="v-leave" hidden><h2>Leave management</h2><p class="sub">Balance = credits added minus approved leave with pay. It recalculates after every change.</p>
       <h3 class="sec">Leave balances</h3>
       <div class="lc"><select id="lc-e"></select><input id="lc-d" inputmode="decimal" placeholder="Days (+/-)"><input id="lc-r" placeholder="Remarks (e.g. 2026 annual leave)"><button class="btn p" id="lc-add">Add credits</button></div>
@@ -366,14 +399,15 @@ async function adminHome() {
   </main></div>`;
   document.querySelector('.side').onclick = e => {
     const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
-    ['dash', 'logs', 'emps', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    ['dash', 'logs', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave();
+    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles();
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
   $('dlh').onclick = () => exportAudit(); $('clh').onclick = clearAudit;
   $('lc-add').onclick = addCredit; $('lv-new').onclick = () => openLeave(); $('ltb').onclick = leaveClick;
+  $('pfb').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.open) openProfile(b.dataset.open); };
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
   $('eb').onclick = e => {
     const t = e.target, d = t.dataset;
@@ -469,7 +503,11 @@ async function chgPin(id, name) {
   if (error) return say('Could not change PIN', error.message);
   loadEmps(); loadAudit();
 }
-async function removePhotos(paths) { if (paths && paths.length) await db.storage.from('selfies').remove(paths); }
+async function removePhotos(paths) {
+  const all = paths || [], docs = all.filter(x => x.startsWith('doc:')).map(x => x.slice(4)), pics = all.filter(x => !x.startsWith('doc:'));
+  if (pics.length) await db.storage.from('selfies').remove(pics);
+  if (docs.length) await db.storage.from('employee-docs').remove(docs);
+}
 async function delPunch(id) {
   const reason = await modal({ title: 'Delete this log permanently?', message: 'This cannot be undone. A record of the deletion, with your reason, is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete log', danger: true });
   if (!reason) return;
@@ -490,10 +528,11 @@ function auditText(a, d) {
   if (a === 'delete_employee') return `${d.employee} and ${d.logs_deleted} log(s)${w}`;
   if (a === 'clear_history') return `${d.entries_removed} entries removed${w}`;
   if (a === 'add_leave_credit') return `${d.employee}: ${d.days > 0 ? '+' : ''}${d.days} day(s)${d.remarks ? ' | ' + d.remarks : ''}`;
+  if (/_document$/.test(a)) return `${d.employee}: ${d.doc_type} (${d.file})${w}`;
   if (/_leave$/.test(a)) return `${d.employee}: ${d.leave_type}, ${d.from} to ${d.to}, ${d.days} day(s), ${d.status} - ${d.pay}${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
@@ -584,6 +623,67 @@ async function leaveClick(e) {
     loadLeave(); loadAudit();
   }
 }
+
+/* ---------- Employee profiles (201 file) ---------- */
+let pfRows = [], pfId = null, pfDocs = [];
+const pfMap = { 'pf-no': 'employee_no', 'pf-jt': 'job_title', 'pf-dp': 'department', 'pf-et': 'emp_type', 'pf-dh': 'date_hired', 'pf-bd': 'birthdate', 'pf-cn': 'contact_no', 'pf-em': 'email', 'pf-ad': 'address', 'pf-en': 'emergency_name', 'pf-ec': 'emergency_contact', 'pf-ss': 'sss_no', 'pf-ph': 'philhealth_no', 'pf-pi': 'pagibig_no', 'pf-tn': 'tin_no' };
+const pfMsg = (t, bad) => { const n = $('pf-note'); n.style.color = bad ? 'var(--bad)' : 'var(--in)'; n.textContent = t; };
+async function loadProfiles() {
+  const [E, D] = await Promise.all([
+    db.from('employees').select('id,name,active,' + Object.values(pfMap).join(',')).order('name'),
+    db.from('employee_docs').select('employee_id')
+  ]);
+  const err = E.error || D.error;
+  if (err) { $('pfb').innerHTML = `<tr><td colspan="7">${esc(err.message)}</td></tr>`; return; }
+  pfRows = E.data;
+  const cnt = {}; D.data.forEach(x => cnt[x.employee_id] = (cnt[x.employee_id] || 0) + 1);
+  $('pfb').innerHTML = pfRows.map(e => `<tr><td><div class="who2"><span class="av">${ini(e.name)}</span>${esc(e.name)}</div></td><td>${esc(e.job_title || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.emp_type || '-')}</td><td>${e.date_hired ? fmt(`${e.date_hired}T12:00:00+08:00`, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}</td><td class="num">${cnt[e.id] || 0}</td><td style="text-align:right"><button class="btn sm" data-open="${e.id}">Open</button></td></tr>`).join('') || '<tr><td colspan="7">No employees yet.</td></tr>';
+}
+function openProfile(id) {
+  pfId = id; const e = pfRows.find(r => r.id === id);
+  $('pft').textContent = e.name;
+  Object.entries(pfMap).forEach(([el, col]) => $(el).value = e[col] || '');
+  $('pf-note').textContent = ''; $('pf-file').value = '';
+  $('pfm').showModal(); loadDocs();
+}
+async function saveProfile() {
+  const data = {}; Object.entries(pfMap).forEach(([el, col]) => data[col] = $(el).value);
+  const { error } = await db.rpc('admin_save_profile', { p_id: pfId, p_data: data });
+  if (error) return pfMsg(error.message, true);
+  pfMsg('Saved.'); loadProfiles(); loadAudit();
+}
+async function loadDocs() {
+  const { data, error } = await db.from('employee_docs').select('*').eq('employee_id', pfId).order('uploaded_at', { ascending: false });
+  pfDocs = data || [];
+  $('pfd').innerHTML = error ? `<tr><td>${esc(error.message)}</td></tr>` : pfDocs.map(x => `<tr><td><b>${esc(x.doc_type)}</b><br><span class="sub" style="margin:0">${esc(x.file_name)} | ${fmt(x.uploaded_at, { month: 'short', day: 'numeric', year: 'numeric' })}</span></td><td style="text-align:right"><button class="btn sm" data-view="${x.id}">Download</button> <button class="btn sm" data-rm="${x.id}">Delete</button></td></tr>`).join('') || '<tr><td>No documents yet.</td></tr>';
+}
+async function uploadDoc() {
+  const f = $('pf-file').files[0];
+  if (!f) return pfMsg('Choose a file first.', true);
+  if (f.size > 10 * 1024 * 1024) return pfMsg('That file is over 10 MB.', true);
+  const path = `${pfId}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
+  const up = await db.storage.from('employee-docs').upload(path, f, { contentType: f.type || 'application/octet-stream' });
+  if (up.error) return pfMsg(up.error.message, true);
+  const { error } = await db.rpc('admin_add_document', { p_employee: pfId, p_type: $('pf-dt').value, p_file: f.name, p_path: path });
+  if (error) { await db.storage.from('employee-docs').remove([path]); return pfMsg(error.message, true); }
+  $('pf-file').value = ''; pfMsg('Uploaded.'); loadDocs(); loadProfiles(); loadAudit();
+}
+async function docClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.view) {
+    const x = pfDocs.find(r => r.id === b.dataset.view);
+    const { data, error } = await db.storage.from('employee-docs').createSignedUrl(x.file_path, 300, { download: x.file_name });
+    if (error) return pfMsg(error.message, true);
+    const a = document.createElement('a'); a.href = data.signedUrl; a.click();
+  } else if (b.dataset.rm) {
+    const reason = await modal({ title: 'Delete this document?', message: 'The file is permanently erased. A record is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete document', danger: true });
+    if (!reason) return;
+    const { data, error } = await db.rpc('admin_delete_document', { p_id: b.dataset.rm, p_reason: reason });
+    if (error) return say('Could not delete', error.message);
+    await db.storage.from('employee-docs').remove([data]); loadDocs(); loadProfiles(); loadAudit();
+  }
+}
+$('pf-save').onclick = saveProfile; $('pf-up').onclick = uploadDoc; $('pf-close').onclick = () => $('pfm').close(); $('pfd').onclick = docClick;
 
 location.hash === '#admin' ? startAdmin() : startKiosk();
 addEventListener('hashchange', () => location.reload());

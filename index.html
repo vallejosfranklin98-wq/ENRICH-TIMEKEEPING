@@ -174,6 +174,7 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
 .lc2{display:grid;grid-template-columns:1fr 1.6fr auto;gap:10px;margin:10px 0}
 @media(max-width:700px){.lc2{grid-template-columns:1fr}}
 #scm{width:min(94vw,520px)}#scm p{margin:14px 0 0;color:var(--bad);font-size:14px}
+#pam{width:min(94vw,560px)}#pa-note{margin:14px 0 0;color:var(--bad);font-size:14px}.pay-in{width:140px}
 </style>
 </head>
 <body>
@@ -255,6 +256,19 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
   <div class="mb"><button class="btn" id="sc-close">Cancel</button><button class="btn p" id="sc-save">Save</button></div>
 </dialog>
 
+<dialog id="pam"><h3 id="pat">Adjustments</h3>
+  <p class="sub">Manual lines for this pay period: overtime or allowances (earnings), loans, cash advances or absences (deductions).</p>
+  <div class="fgrid">
+    <label>Type<select id="pa-k"><option>Earning</option><option>Deduction</option></select></label>
+    <label>Amount (PHP)<input id="pa-a" inputmode="decimal"></label>
+    <label class="wide">Description<input id="pa-l" placeholder="e.g. Overtime, Company loan"></label>
+  </div>
+  <div class="row"><button class="btn p" id="pa-add">Add line</button></div>
+  <div class="wrap"><table><tbody id="pa-list"></tbody></table></div>
+  <p id="pa-note"></p>
+  <div class="mb"><button class="btn" id="pa-close">Close</button></div>
+</dialog>
+
 <script>
 const SUPABASE_URL = 'https://rborjrfvbdshbthlnsbw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJib3JqcmZ2YmRzaGJ0aGxuc2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTM1MjIsImV4cCI6MjEwNzk2OTUyMn0.w7rYYLo1GGs0KB6d3TAmKzEn-_9FBfBDyf_67sTl5o4';
@@ -276,6 +290,7 @@ const IC = {
   check:'<svg class="i" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
   clock:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   warn:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  wallet:'<svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/></svg>',
   sheet:'<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   id:'<svg class="i" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M13 10h5M13 14h4"/></svg>',
   leave:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
@@ -375,6 +390,7 @@ async function adminHome() {
     <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
     <button class="nav" data-v="sched">${IC.clock}Schedules</button>
     <button class="nav" data-v="ts">${IC.sheet}Timesheet</button>
+    <button class="nav" data-v="pay">${IC.wallet}Payroll</button>
     <button class="nav" data-v="emps">${IC.emps}Employee management</button>
     <button class="nav" data-v="prof">${IC.id}Employee profiles</button>
     <button class="nav" data-v="leave">${IC.leave}Leave management</button>
@@ -406,6 +422,14 @@ async function adminHome() {
       <h3 class="sec">Daily detail</h3>
       <div class="wrap"><table><thead><tr><th>Date</th><th>Employee</th><th>Schedule</th><th>Time in</th><th>Time out</th><th>Late</th><th>Under</th><th>OT</th><th>Hours</th><th>Status</th></tr></thead><tbody id="tsd"></tbody></table></div>
     </section>
+    <section id="v-pay" hidden><h2>Payroll</h2><p class="sub">Twice a month. Basic pay and late/undertime come from the Timesheet. SSS, PhilHealth and Pag-IBIG are the employee share, split half per cutoff. Withholding tax uses the semi-monthly BIR table on pay after those contributions.</p>
+      <h3 class="sec">Pay settings</h3>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Paid</th><th>Daily rate or monthly salary (PHP)</th><th></th></tr></thead><tbody id="ps-b"></tbody></table></div>
+      <h3 class="sec">Payroll period</h3>
+      <div class="row"><input type="date" id="py1" value="${cutoff(today)[0]}"><input type="date" id="py2" value="${cutoff(today)[1]}"><button class="btn p" id="py-run">Compute payroll</button><button class="btn" id="py-csv">Export CSV</button></div>
+      <p id="py-note" class="sub"></p>
+      <div class="wrap"><table><thead><tr><th>Employee</th><th>Paid</th><th>Basic</th><th>Late / UT</th><th>Other earnings</th><th>Gross</th><th>SSS</th><th>PhilHealth</th><th>Pag-IBIG</th><th>Tax</th><th>Other deductions</th><th>Net pay</th><th></th></tr></thead><tbody id="py-b"></tbody></table></div>
+    </section>
     <section id="v-emps" hidden><h2>Employee management</h2>
       <div class="row"><input id="nn" placeholder="Full name"><input id="np" inputmode="numeric" maxlength="5" placeholder="PIN (5 digits)"><button class="btn p" id="ad">Add employee</button></div>
       <div class="wrap"><table><thead><tr><th>Name</th><th>PIN</th><th>Status</th><th></th></tr></thead><tbody id="eb"></tbody></table></div>
@@ -428,9 +452,9 @@ async function adminHome() {
   </main></div>`;
   document.querySelector('.side').onclick = e => {
     const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
-    ['dash', 'logs', 'sched', 'ts', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
+    ['dash', 'logs', 'sched', 'ts', 'pay', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles(); if (v === 'sched') loadSched(); if (v === 'ts') loadTs();
+    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles(); if (v === 'sched') loadSched(); if (v === 'ts') loadTs(); if (v === 'pay') loadPaySettings();
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
@@ -438,6 +462,7 @@ async function adminHome() {
   $('lc-add').onclick = addCredit; $('lv-new').onclick = () => openLeave(); $('ltb').onclick = leaveClick;
   $('pfb').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.open) openProfile(b.dataset.open); };
   $('sc-new').onclick = () => openSched(); $('scb').onclick = schedClick; $('sab').onchange = assignChange; $('t-load').onclick = loadTs; $('t-csv').onclick = exportTs;
+  $('ps-b').onclick = payClick; $('py-run').onclick = runPayroll; $('py-csv').onclick = exportPay; $('py-b').onclick = payRowClick;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
   $('eb').onclick = e => {
     const t = e.target, d = t.dataset;
@@ -560,11 +585,12 @@ function auditText(a, d) {
   if (a === 'add_leave_credit') return `${d.employee}: ${d.days > 0 ? '+' : ''}${d.days} day(s)${d.remarks ? ' | ' + d.remarks : ''}`;
   if (a === 'save_schedule' || a === 'delete_schedule') return `${d.schedule}${w}`;
   if (a === 'set_schedule') return `${d.employee}: ${d.schedule || 'No schedule'}`;
+  if (/_adjustment$/.test(a)) return `${d.employee}: ${d.kind} - ${d.label} (${d.amount})${w}`;
   if (/_document$/.test(a)) return `${d.employee}: ${d.doc_type} (${d.file})${w}`;
   if (/_leave$/.test(a)) return `${d.employee}: ${d.leave_type}, ${d.from} to ${d.to}, ${d.days} day(s), ${d.status} - ${d.pay}${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document', save_schedule: 'Saved schedule', delete_schedule: 'Deleted schedule', set_schedule: 'Assigned schedule' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document', save_schedule: 'Saved schedule', delete_schedule: 'Deleted schedule', set_schedule: 'Assigned schedule', set_pay: 'Updated pay settings', add_adjustment: 'Added pay adjustment', delete_adjustment: 'Deleted pay adjustment' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
@@ -778,7 +804,7 @@ async function loadTs() {
       const ins = days[day].filter(p => p.kind === 'in'), outs = days[day].filter(p => p.kind === 'out');
       const tin = ins.length ? ins[0].punched_at : null, lo = outs.length ? outs[outs.length - 1].punched_at : null;
       const tout = tin && lo && new Date(lo) > new Date(tin) ? lo : null;
-      const r = { name: e.name, day, sched: sc ? sc.name : '-', tin, tout, late: null, under: null, ot: null, work: null, status: !tin ? 'No time in' : !tout ? 'No time out' : 'OK' };
+      const r = { eid: e.id, name: e.name, day, sched: sc ? sc.name : '-', tin, tout, late: null, under: null, ot: null, work: null, status: !tin ? 'No time in' : !tout ? 'No time out' : 'OK' };
       if (tin && sc) { const m = mod(tin), si = tm(sc.time_in); r.late = m > si + sc.grace_minutes ? m - si : 0; }
       if (tin && tout) {
         r.work = Math.max(0, Math.round((new Date(tout) - new Date(tin)) / 6e4) - (sc ? sc.break_minutes : 0));
@@ -801,6 +827,98 @@ function exportTs() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv' })); a.download = `timesheet-${$('t1').value}-to-${$('t2').value}.csv`; a.click();
 }
 $('sc-save').onclick = saveSched; $('sc-close').onclick = () => $('scm').close();
+
+/* ---------- Payroll ---------- */
+let payRows = [], adjEmp = null, payPeriod = ['', ''];
+const cutoff = d => { const y = +d.slice(0, 4), m = +d.slice(5, 7), last = new Date(y, m, 0).getDate(), z = n => String(n).padStart(2, '0'); return +d.slice(8) <= 15 ? [`${y}-${z(m)}-01`, `${y}-${z(m)}-15`] : [`${y}-${z(m)}-16`, `${y}-${z(m)}-${z(last)}`]; };
+const peso = x => '\u20b1' + Number(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const r2 = x => Math.round(x * 100) / 100;
+const whoH = n => `<div class="who2"><span class="av">${ini(n)}</span>${esc(n)}</div>`;
+async function loadPaySettings() {
+  const { data, error } = await db.from('employees').select('id,name,pay_type,pay_rate').eq('active', true).order('name');
+  if (error) { $('ps-b').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
+  $('ps-b').innerHTML = data.map(e => `<tr><td>${whoH(e.name)}</td><td><select style="width:140px"><option value="">Not set</option><option${e.pay_type === 'Daily' ? ' selected' : ''}>Daily</option><option${e.pay_type === 'Monthly' ? ' selected' : ''}>Monthly</option></select></td><td><input class="pay-in" inputmode="decimal" placeholder="Rate" value="${e.pay_rate || ''}"></td><td style="text-align:right"><button class="btn sm" data-ps="${e.id}">Save</button></td></tr>`).join('') || '<tr><td colspan="4">No active employees yet.</td></tr>';
+}
+async function payClick(e) {
+  const b = e.target.closest('button'); if (!b || !b.dataset.ps) return;
+  const tr = b.closest('tr'), type = tr.querySelector('select').value, rate = parseFloat(tr.querySelector('input').value);
+  const { error } = await db.rpc('admin_set_pay', { p_employee: b.dataset.ps, p_type: type || null, p_rate: type ? rate : null });
+  if (error) return say('Could not save', error.message);
+  b.textContent = 'Saved'; setTimeout(() => b.textContent = 'Save', 1500); loadAudit();
+}
+async function runPayroll() {
+  const a = $('py1').value, b = $('py2').value;
+  $('t1').value = a; $('t2').value = b; $('t-e').value = ''; await loadTs();
+  const [E, A, PR, TB] = await Promise.all([
+    db.from('employees').select('id,name,pay_type,pay_rate').eq('active', true).order('name'),
+    db.from('pay_adjustments').select('*').eq('period_start', a).eq('period_end', b),
+    db.from('pay_params').select('*'),
+    db.from('tax_brackets').select('*').order('lower')
+  ]);
+  const err = E.error || A.error || PR.error || TB.error;
+  if (err) { $('py-note').textContent = err.message; return; }
+  const P = {}; PR.data.forEach(x => P[x.key] = Number(x.value));
+  payPeriod = [a, b]; payRows = [];
+  E.data.forEach(e => {
+    const row = { id: e.id, name: e.name, type: e.pay_type, skip: !e.pay_type || !e.pay_rate, adj: A.data.filter(x => x.employee_id === e.id) };
+    if (!row.skip) {
+      const rate = Number(e.pay_rate), mo = e.pay_type === 'Monthly', monthly = mo ? rate : rate * P.days_factor, daily = mo ? rate / P.days_factor : rate;
+      const ts = tsRows.filter(r => r.eid === e.id), done = ts.filter(r => r.tin && r.tout);
+      row.bad = ts.filter(r => r.status.startsWith('No time')).length; row.days = done.length;
+      row.basic = r2(mo ? rate / 2 : rate * done.length);
+      row.late = r2(daily / (P.hours_per_day * 60) * ts.reduce((n, r) => n + (r.late || 0) + (r.under || 0), 0));
+      row.earn = r2(row.adj.filter(x => x.kind === 'Earning').reduce((n, x) => n + Number(x.amount), 0));
+      row.oth = r2(row.adj.filter(x => x.kind === 'Deduction').reduce((n, x) => n + Number(x.amount), 0));
+      row.gross = r2(row.basic - row.late + row.earn);
+      row.sss = r2(Math.min(P.sss_max, Math.max(P.sss_min, Math.round(monthly / P.sss_step) * P.sss_step)) * P.sss_rate / 2);
+      row.ph = r2(Math.min(P.ph_ceiling, Math.max(P.ph_floor, monthly)) * P.ph_rate / 2 / 2);
+      row.pi = r2(Math.min(monthly, P.pi_cap) * P.pi_rate / 2);
+      row.taxable = Math.max(0, row.gross - row.sss - row.ph - row.pi);
+      const br = TB.data.filter(x => row.taxable >= Number(x.lower)).pop() || { lower: 0, base: 0, rate: 0 };
+      row.tax = r2(Number(br.base) + Number(br.rate) * (row.taxable - Number(br.lower)));
+      row.net = r2(row.gross - row.sss - row.ph - row.pi - row.tax - row.oth);
+    }
+    payRows.push(row);
+  });
+  const skipped = payRows.filter(r => r.skip).length, bad = payRows.reduce((n, r) => n + (r.bad || 0), 0);
+  $('py-note').textContent = `${a} to ${b}.` + (skipped ? ` ${skipped} employee(s) have no pay settings and are not computed.` : '') + (bad ? ` ${bad} day(s) have a missing time in or out and are not paid for daily-paid staff: fix them in Employee logs.` : '');
+  $('py-b').innerHTML = payRows.map(r => r.skip ? `<tr><td>${whoH(r.name)}</td><td colspan="11"><span class="pill bad">No pay settings</span></td><td></td></tr>` : `<tr><td>${whoH(r.name)}</td><td>${r.type}${r.type === 'Daily' ? ` (${r.days}d)` : ''}</td><td class="num">${peso(r.basic)}</td><td class="num">${r.late ? '-' + peso(r.late) : '-'}</td><td class="num">${r.earn ? peso(r.earn) : '-'}</td><td class="num">${peso(r.gross)}</td><td class="num">${peso(r.sss)}</td><td class="num">${peso(r.ph)}</td><td class="num">${peso(r.pi)}</td><td class="num">${peso(r.tax)}</td><td class="num">${r.oth ? peso(r.oth) : '-'}</td><td class="num">${peso(r.net)}</td><td style="text-align:right"><button class="btn sm" data-adj="${r.id}">Adjust</button> <button class="btn sm" data-slip="${r.id}">Payslip</button></td></tr>`).join('') || '<tr><td colspan="13">No active employees yet.</td></tr>';
+}
+function exportPay() {
+  const q = x => '"' + String(x).replace(/"/g, '""') + '"';
+  const lines = ['Employee,Paid,Basic,Late/Undertime,Other earnings,Gross,SSS,PhilHealth,Pag-IBIG,Tax,Other deductions,Net pay', ...payRows.filter(r => !r.skip).map(r => [q(r.name), r.type, r.basic, r.late, r.earn, r.gross, r.sss, r.ph, r.pi, r.tax, r.oth, r.net].join(','))];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv' })); a.download = `payroll-${payPeriod[0]}-to-${payPeriod[1]}.csv`; a.click();
+}
+function printSlip(id) {
+  const r = payRows.find(x => x.id === id), L = (k, v, m) => `<tr><td>${k}</td><td style="text-align:right">${m ? '-' : ''}${peso(v)}</td></tr>`;
+  const ae = r.adj.filter(x => x.kind === 'Earning').map(x => L(esc(x.label), x.amount)).join(''), ad = r.adj.filter(x => x.kind === 'Deduction').map(x => L(esc(x.label), x.amount, 1)).join('');
+  const w = window.open('', '_blank'); if (!w) return say('Pop-up blocked', 'Allow pop-ups for this site, then try again.');
+  w.document.write(`<!doctype html><title>Payslip - ${esc(r.name)}</title><style>body{font:14px system-ui,sans-serif;margin:32px;max-width:520px}h2{margin:0}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px solid #ddd}.t td{font-weight:700;border-top:2px solid #000;font-size:16px}</style><h2>Enrich Agrifarms Inc.</h2><p>Payslip | ${payPeriod[0]} to ${payPeriod[1]}<br><b>${esc(r.name)}</b> (${r.type}-paid${r.type === 'Daily' ? ', ' + r.days + ' day(s)' : ''})</p><table>${L('Basic pay', r.basic)}${r.late ? L('Late / undertime', r.late, 1) : ''}${ae}<tr class="t"><td>Gross pay</td><td style="text-align:right">${peso(r.gross)}</td></tr>${L('SSS', r.sss, 1)}${L('PhilHealth', r.ph, 1)}${L('Pag-IBIG', r.pi, 1)}${L('Withholding tax', r.tax, 1)}${ad}<tr class="t"><td>Net pay</td><td style="text-align:right">${peso(r.net)}</td></tr></table>`);
+  w.document.close(); w.focus(); w.print();
+}
+function renderAdj() {
+  const r = payRows.find(x => x.id === adjEmp);
+  $('pa-list').innerHTML = r.adj.map(x => `<tr><td><span class="pill ${x.kind === 'Earning' ? 'in' : 'bad'}">${x.kind}</span></td><td>${esc(x.label)}</td><td class="num">${peso(x.amount)}</td><td style="text-align:right"><button class="btn sm" data-adel="${x.id}">Delete</button></td></tr>`).join('') || '<tr><td>No adjustments for this period.</td></tr>';
+}
+function payRowClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.slip) return printSlip(b.dataset.slip);
+  if (b.dataset.adj) { adjEmp = b.dataset.adj; $('pat').textContent = `Adjustments - ${payRows.find(x => x.id === adjEmp).name}`; $('pa-note').textContent = ''; renderAdj(); $('pam').showModal(); }
+}
+$('pa-add').onclick = async () => {
+  const { error } = await db.rpc('admin_add_adjustment', { p_employee: adjEmp, p_start: payPeriod[0], p_end: payPeriod[1], p_kind: $('pa-k').value, p_label: $('pa-l').value.trim(), p_amount: parseFloat($('pa-a').value) });
+  if (error) { $('pa-note').textContent = error.message; return; }
+  $('pa-note').textContent = ''; $('pa-l').value = $('pa-a').value = ''; await runPayroll(); renderAdj(); loadAudit();
+};
+$('pa-list').onclick = async e => {
+  const b = e.target.closest('button'); if (!b || !b.dataset.adel) return;
+  const reason = await modal({ title: 'Delete this line?', message: 'It will be removed from this pay period. A record is saved in History.', input: { placeholder: 'Reason for deleting (required)' }, ok: 'Delete line', danger: true });
+  if (!reason) return;
+  const { error } = await db.rpc('admin_delete_adjustment', { p_id: b.dataset.adel, p_reason: reason });
+  if (error) return say('Could not delete', error.message);
+  await runPayroll(); renderAdj(); loadAudit();
+};
+$('pa-close').onclick = () => $('pam').close();
 
 location.hash === '#admin' ? startAdmin() : startKiosk();
 addEventListener('hashchange', () => location.reload());

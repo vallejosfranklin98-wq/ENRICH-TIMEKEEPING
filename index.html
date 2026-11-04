@@ -176,6 +176,8 @@ select:focus{border-color:var(--brand2);box-shadow:var(--ring)}
 #scm{width:min(94vw,520px)}#scm p{margin:14px 0 0;color:var(--bad);font-size:14px}
 #pam{width:min(94vw,560px)}#pa-note{margin:14px 0 0;color:var(--bad);font-size:14px}.pay-in{width:140px}
 #sc-rest input{width:auto}#sc-rest label{flex-direction:row;align-items:center;gap:5px}
+.navh{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);padding:18px 14px 6px;opacity:.85}.side{overflow-y:auto}
+@media(max-width:860px){.navh{display:none}}
 </style>
 </head>
 <body>
@@ -389,13 +391,17 @@ async function adminHome() {
   $('admin').innerHTML = `<div class="shell">
   <aside class="side">${brand()}
     <button class="nav on" data-v="dash">${IC.dash}Dashboard</button>
+    <div class="navh">People</div>
+    <button class="nav" data-v="emps">${IC.emps}Employee management</button>
+    <button class="nav" data-v="prof">${IC.id}Employee profiles</button>
+    <div class="navh">Time &amp; attendance</div>
     <button class="nav" data-v="logs">${IC.logs}Employee logs</button>
     <button class="nav" data-v="sched">${IC.clock}Schedules</button>
     <button class="nav" data-v="ts">${IC.sheet}Timesheet</button>
-    <button class="nav" data-v="pay">${IC.wallet}Payroll</button>
-    <button class="nav" data-v="emps">${IC.emps}Employee management</button>
-    <button class="nav" data-v="prof">${IC.id}Employee profiles</button>
     <button class="nav" data-v="leave">${IC.leave}Leave management</button>
+    <div class="navh">Payroll</div>
+    <button class="nav" data-v="pay">${IC.wallet}Payroll</button>
+    <div class="navh">System</div>
     <button class="nav" data-v="hist">${IC.hist}History</button>
     <button class="btn so" id="so">${IC.out}Sign out</button>
   </aside>

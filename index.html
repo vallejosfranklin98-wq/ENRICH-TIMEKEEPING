@@ -437,9 +437,11 @@ async function adminHome() {
       <h3 class="sec">Pay settings</h3>
       <div class="wrap"><table><thead><tr><th>Employee</th><th>Paid</th><th>Daily rate or monthly salary (PHP)</th><th></th></tr></thead><tbody id="ps-b"></tbody></table></div>
       <h3 class="sec">Payroll period</h3>
-      <div class="row"><input type="date" id="py1" value="${cutoff(today)[0]}"><input type="date" id="py2" value="${cutoff(today)[1]}"><button class="btn p" id="py-run">Compute payroll</button><button class="btn" id="py-csv">Export CSV</button></div>
+      <div class="row"><input type="date" id="py1" value="${cutoff(today)[0]}"><input type="date" id="py2" value="${cutoff(today)[1]}"><button class="btn p" id="py-run">Compute payroll</button><button class="btn" id="py-csv">Export CSV</button><button class="btn p" id="py-fin">Finalize payroll</button><button class="btn warn" id="py-reopen" hidden>Reopen payroll</button></div>
       <p id="py-note" class="sub"></p>
       <div class="wrap"><table><thead><tr><th>Employee</th><th>Paid</th><th>Basic</th><th>Late / UT</th><th>Holiday / rest day</th><th>Other earnings</th><th>Gross</th><th>SSS</th><th>PhilHealth</th><th>Pag-IBIG</th><th>Tax</th><th>Other deductions</th><th>Net pay</th><th></th></tr></thead><tbody id="py-b"></tbody></table></div>
+      <h3 class="sec">Finalized payrolls</h3><p class="sub">Saved and locked. Click View to see the figures and payslips exactly as finalized.</p>
+      <div class="wrap"><table><thead><tr><th>Period</th><th>Employees</th><th>Total gross</th><th>Total net</th><th>Finalized</th><th></th></tr></thead><tbody id="prb"></tbody></table></div>
       <h3 class="sec">13th-month pay</h3><p class="sub">Total basic salary earned in the year divided by 12. Overtime, holiday pay, premiums and allowances are not counted. Due on or before December 24. Pay is tax-exempt up to PHP 90,000 combined with other benefits.</p>
       <div class="row"><input id="m1" inputmode="numeric" style="width:110px" value="${today.slice(0, 4)}"><input type="date" id="m2" value="${today}"><button class="btn p" id="m-run">Compute 13th month</button><button class="btn" id="m-csv">Export CSV</button></div>
       <p id="m-note" class="sub"></p>
@@ -469,7 +471,7 @@ async function adminHome() {
     const b = e.target.closest('.nav'); const v = b && b.dataset.v; if (!v) return;
     ['dash', 'logs', 'sched', 'ts', 'pay', 'emps', 'prof', 'leave', 'hist'].forEach(k => $('v-' + k).hidden = k !== v);
     document.querySelectorAll('.nav').forEach(n => n.classList.toggle('on', n.dataset.v === v));
-    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles(); if (v === 'sched') { loadSched(); loadHolidays(); } if (v === 'ts') loadTs(); if (v === 'pay') loadPaySettings();
+    scrollTo(0, 0); if (v === 'dash') loadDash(); if (v === 'leave') loadLeave(); if (v === 'prof') loadProfiles(); if (v === 'sched') { loadSched(); loadHolidays(); } if (v === 'ts') loadTs(); if (v === 'pay') { loadPaySettings(); loadRuns(); }
   };
   $('so').onclick = async () => { await db.auth.signOut(); adminLogin(); };
   $('ld').onclick = loadPunches; $('csv').onclick = exportCsv; $('ad').onclick = addEmp;
@@ -477,7 +479,7 @@ async function adminHome() {
   $('lc-add').onclick = addCredit; $('lv-new').onclick = () => openLeave(); $('ltb').onclick = leaveClick;
   $('pfb').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.open) openProfile(b.dataset.open); };
   $('sc-new').onclick = () => openSched(); $('scb').onclick = schedClick; $('sab').onchange = assignChange; $('t-load').onclick = loadTs; $('t-csv').onclick = exportTs;
-  $('ps-b').onclick = payClick; $('py-run').onclick = runPayroll; $('py-csv').onclick = exportPay; $('py-b').onclick = payRowClick; $('hl-add').onclick = addHoliday; $('hlb').onclick = holClick; $('m-run').onclick = run13th; $('m-csv').onclick = export13th;
+  $('ps-b').onclick = payClick; $('py-run').onclick = runPayroll; $('py-csv').onclick = exportPay; $('py-b').onclick = payRowClick; $('hl-add').onclick = addHoliday; $('hlb').onclick = holClick; $('m-run').onclick = run13th; $('m-csv').onclick = export13th; $('py-fin').onclick = finalizePayroll; $('py-reopen').onclick = () => reopenRun(payRun.id); $('prb').onclick = runClick;
   $('tb').onclick = e => { const id = e.target.dataset.del; if (id) delPunch(id); };
   $('eb').onclick = e => {
     const t = e.target, d = t.dataset;
@@ -600,13 +602,15 @@ function auditText(a, d) {
   if (a === 'add_leave_credit') return `${d.employee}: ${d.days > 0 ? '+' : ''}${d.days} day(s)${d.remarks ? ' | ' + d.remarks : ''}`;
   if (a === 'save_schedule' || a === 'delete_schedule') return `${d.schedule}${w}`;
   if (a === 'set_schedule') return `${d.employee}: ${d.schedule || 'No schedule'}`;
+  if (a === 'finalize_payroll') return `${d.period} | ${d.employees} employees | net ${d.total_net}`;
+  if (a === 'reopen_payroll') return `${d.period}${w}`;
   if (a === 'save_holiday' || a === 'delete_holiday') return `${d.name} (${d.day})`;
   if (/_adjustment$/.test(a)) return `${d.employee}: ${d.kind} - ${d.label} (${d.amount})${w}`;
   if (/_document$/.test(a)) return `${d.employee}: ${d.doc_type} (${d.file})${w}`;
   if (/_leave$/.test(a)) return `${d.employee}: ${d.leave_type}, ${d.from} to ${d.to}, ${d.days} day(s), ${d.status} - ${d.pay}${w}`;
   return d.employee || '';
 }
-const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document', save_schedule: 'Saved schedule', delete_schedule: 'Deleted schedule', set_schedule: 'Assigned schedule', set_pay: 'Updated pay settings', add_adjustment: 'Added pay adjustment', delete_adjustment: 'Deleted pay adjustment', save_holiday: 'Saved holiday', delete_holiday: 'Deleted holiday' };
+const actions = { delete_punch: 'Deleted log', delete_employee: 'Deleted employee', add_employee: 'Added employee', change_pin: 'Changed PIN', clear_history: 'Cleared history', add_leave_credit: 'Added leave credits', add_leave: 'Added leave', edit_leave: 'Edited leave', delete_leave: 'Deleted leave', update_profile: 'Updated profile', add_document: 'Added document', delete_document: 'Deleted document', save_schedule: 'Saved schedule', delete_schedule: 'Deleted schedule', set_schedule: 'Assigned schedule', set_pay: 'Updated pay settings', add_adjustment: 'Added pay adjustment', delete_adjustment: 'Deleted pay adjustment', save_holiday: 'Saved holiday', delete_holiday: 'Deleted holiday', finalize_payroll: 'Finalized payroll', reopen_payroll: 'Reopened payroll' };
 async function loadAudit() {
   const { data, error } = await db.from('audit_log').select('*').order('at', { ascending: false }).limit(100);
   if (error) { $('ab').innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
@@ -867,6 +871,8 @@ const addDays = (d, n) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x
 const isoDow = d => { const n = new Date(`${d}T12:00:00Z`).getUTCDay(); return n === 0 ? 7 : n; };
 async function runPayroll() {
   const a = $('py1').value, b = $('py2').value, back = addDays(a, -10);
+  const fr = await db.from('payroll_runs').select('*').eq('period_start', a).eq('period_end', b);
+  if (fr.data && fr.data.length) return openRun(fr.data[0]);
   $('t1').value = back; $('t2').value = b; $('t-e').value = ''; await loadTs();
   const R = await Promise.all([
     db.from('employees').select('id,name,pay_type,pay_rate,schedule_id').eq('active', true).order('name'),
@@ -914,8 +920,49 @@ async function runPayroll() {
     payRows.push(row);
   });
   const skipped = payRows.filter(r => r.skip).length, bad = payRows.reduce((n, r) => n + (r.bad || 0), 0), noSched = E.data.filter(e => e.pay_type && !e.schedule_id).length;
-  $('py-note').textContent = `${a} to ${b}.` + (skipped ? ` ${skipped} employee(s) have no pay settings and are not computed.` : '') + (noSched ? ` ${noSched} employee(s) have no schedule, so rest days are not applied to them.` : '') + (bad ? ` ${bad} day(s) have a missing time in or out and are not paid for daily-paid staff: fix them in Employee logs.` : '');
-  $('py-b').innerHTML = payRows.map(r => r.skip ? `<tr><td>${whoH(r.name)}</td><td colspan="12"><span class="pill bad">No pay settings</span></td><td></td></tr>` : `<tr><td>${whoH(r.name)}</td><td>${r.type}${r.type === 'Daily' ? ` (${r.days}d)` : ''}</td><td class="num">${peso(r.basic)}</td><td class="num">${r.late ? '-' + peso(r.late) : '-'}</td><td class="num">${r.hol ? peso(r.hol) : '-'}</td><td class="num">${r.earn ? peso(r.earn) : '-'}</td><td class="num">${peso(r.gross)}</td><td class="num">${peso(r.sss)}</td><td class="num">${peso(r.ph)}</td><td class="num">${peso(r.pi)}</td><td class="num">${peso(r.tax)}</td><td class="num">${r.oth ? peso(r.oth) : '-'}</td><td class="num">${peso(r.net)}</td><td style="text-align:right"><button class="btn sm" data-adj="${r.id}">Adjust</button> <button class="btn sm" data-slip="${r.id}">Payslip</button></td></tr>`).join('') || '<tr><td colspan="14">No active employees yet.</td></tr>';
+  payNote = `${a} to ${b}.` + (skipped ? ` ${skipped} employee(s) have no pay settings and are not computed.` : '') + (noSched ? ` ${noSched} employee(s) have no schedule, so rest days are not applied to them.` : '') + (bad ? ` ${bad} day(s) have a missing time in or out and are not paid for daily-paid staff: fix them in Employee logs.` : '');
+  payRun = null; renderPay();
+}
+let payNote = '', payRun = null, payRuns = [];
+function renderPay() {
+  const lk = !!payRun;
+  $('py-note').textContent = lk ? `${payPeriod[0]} to ${payPeriod[1]}. Finalized ${fmt(payRun.finalized_at, { month: 'short', day: 'numeric', year: 'numeric' })} by ${payRun.finalized_by || ''}. These figures are saved and locked.` : payNote;
+  $('py-fin').hidden = lk; $('py-reopen').hidden = !lk;
+  $('py-b').innerHTML = payRows.map(r => r.skip ? `<tr><td>${whoH(r.name)}</td><td colspan="12"><span class="pill bad">No pay settings</span></td><td></td></tr>` : `<tr><td>${whoH(r.name)}</td><td>${r.type}${r.type === 'Daily' ? ` (${r.days}d)` : ''}</td><td class="num">${peso(r.basic)}</td><td class="num">${r.late ? '-' + peso(r.late) : '-'}</td><td class="num">${r.hol ? peso(r.hol) : '-'}</td><td class="num">${r.earn ? peso(r.earn) : '-'}</td><td class="num">${peso(r.gross)}</td><td class="num">${peso(r.sss)}</td><td class="num">${peso(r.ph)}</td><td class="num">${peso(r.pi)}</td><td class="num">${peso(r.tax)}</td><td class="num">${r.oth ? peso(r.oth) : '-'}</td><td class="num">${peso(r.net)}</td><td style="text-align:right">${lk ? '' : `<button class="btn sm" data-adj="${r.id}">Adjust</button> `}<button class="btn sm" data-slip="${r.id}">Payslip</button></td></tr>`).join('') || '<tr><td colspan="14">No active employees yet.</td></tr>';
+}
+async function openRun(run) {
+  const { data, error } = await db.from('payroll_lines').select('*').eq('run_id', run.id).order('employee_name');
+  if (error) return say('Could not open', error.message);
+  payPeriod = [run.period_start, run.period_end]; payRun = run; $('py1').value = run.period_start; $('py2').value = run.period_end;
+  payRows = data.map(l => ({ id: l.employee_id || l.id, name: l.employee_name, type: l.pay_type, days: l.days, basic: Number(l.basic), late: Number(l.late), hol: Number(l.hol), earn: Number(l.earn), gross: Number(l.gross), sss: Number(l.sss), ph: Number(l.phic), pi: Number(l.pagibig), tax: Number(l.tax), oth: Number(l.oth), net: Number(l.net), adj: l.adj || [] }));
+  renderPay();
+}
+async function loadRuns() {
+  const { data, error } = await db.from('payroll_runs').select('*').order('period_start', { ascending: false }).limit(48);
+  payRuns = data || [];
+  $('prb').innerHTML = error ? `<tr><td colspan="6">${esc(error.message)}</td></tr>` : payRuns.map(r => `<tr><td>${r.period_start} to ${r.period_end}</td><td class="num">${r.employees}</td><td class="num">${peso(r.total_gross)}</td><td class="num">${peso(r.total_net)}</td><td>${fmt(r.finalized_at, { month: 'short', day: 'numeric', year: 'numeric' })} by ${esc(r.finalized_by || '')}</td><td style="text-align:right"><button class="btn sm" data-view="${r.id}">View</button> <button class="btn sm" data-reopen="${r.id}">Reopen</button></td></tr>`).join('') || '<tr><td colspan="6">No finalized payrolls yet.</td></tr>';
+}
+function runClick(e) {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.view) openRun(payRuns.find(r => r.id === b.dataset.view));
+  else if (b.dataset.reopen) reopenRun(b.dataset.reopen);
+}
+async function finalizePayroll() {
+  const rows = payRows.filter(r => !r.skip);
+  if (payRun || !rows.length) return say('Nothing to finalize', 'Compute a payroll with at least one employee first.');
+  const ok = await modal({ title: `Finalize ${payPeriod[0]} to ${payPeriod[1]}?`, message: 'The figures and payslips are saved and locked, and adjustments for this period are blocked. You can reopen it later with a reason. Fix any missing time in or out first.', ok: 'Finalize payroll' });
+  if (!ok) return;
+  const lines = rows.map(r => ({ employee_id: r.id, name: r.name, pay_type: r.type, days: r.days || 0, basic: r.basic, late: r.late, hol: r.hol, earn: r.earn, gross: r.gross, sss: r.sss, phic: r.ph, pagibig: r.pi, tax: r.tax, oth: r.oth, net: r.net, adj: r.adj.map(x => ({ kind: x.kind, label: x.label, amount: Number(x.amount) })) }));
+  const { error } = await db.rpc('admin_finalize_payroll', { p_start: payPeriod[0], p_end: payPeriod[1], p_lines: lines });
+  if (error) return say('Could not finalize', error.message);
+  await runPayroll(); loadRuns(); loadAudit();
+}
+async function reopenRun(id) {
+  const reason = await modal({ title: 'Reopen this payroll?', message: 'The saved figures are deleted and the period becomes editable and recomputed from current data. A record is saved in History.', input: { placeholder: 'Reason for reopening (required)' }, ok: 'Reopen payroll', danger: true });
+  if (!reason) return;
+  const { error } = await db.rpc('admin_reopen_payroll', { p_run: id, p_reason: reason });
+  if (error) return say('Could not reopen', error.message);
+  payRun = null; await runPayroll(); loadRuns(); loadAudit();
 }
 function exportPay() {
   const q = x => '"' + String(x).replace(/"/g, '""') + '"';
